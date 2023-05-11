@@ -7,6 +7,7 @@ use Illuminate\Queue\QueueManager;
 use Illuminate\Support\ServiceProvider;
 use VladimirYuldashev\LaravelQueueRabbitMQ\Console\BatchableConsumeCommand;
 use VladimirYuldashev\LaravelQueueRabbitMQ\Console\ConsumeCommand;
+use VladimirYuldashev\LaravelQueueRabbitMQ\Console\GarbageCollector;
 use VladimirYuldashev\LaravelQueueRabbitMQ\Queue\Connectors\RabbitMQConnector;
 
 class LaravelQueueRabbitMQServiceProvider extends ServiceProvider
@@ -31,7 +32,9 @@ class LaravelQueueRabbitMQServiceProvider extends ServiceProvider
                     $this->app['queue'],
                     $this->app['events'],
                     $this->app[ExceptionHandler::class],
-                    $isDownForMaintenance
+                    $isDownForMaintenance,
+                    null,
+                    $this->app['config']['queue']['connections']['rabbitmq']
                 );
             });
 
@@ -39,6 +42,12 @@ class LaravelQueueRabbitMQServiceProvider extends ServiceProvider
                 return new BatchableConsumeCommand(
                     $app[BatchableConsumer::class],
                     $app['cache.store']
+                );
+            });
+
+            $this->app->singleton(GarbageCollector::class, static function ($app) {
+                return new GarbageCollector(
+                    $app['config']['queue']['connections']['rabbitmq']
                 );
             });
 
@@ -51,7 +60,9 @@ class LaravelQueueRabbitMQServiceProvider extends ServiceProvider
                     $this->app['queue'],
                     $this->app['events'],
                     $this->app[ExceptionHandler::class],
-                    $isDownForMaintenance
+                    $isDownForMaintenance,
+                    null,
+                    $this->app['config']['queue']['connections']['rabbitmq']
                 );
             });
 

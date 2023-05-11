@@ -4,6 +4,9 @@ namespace VladimirYuldashev\LaravelQueueRabbitMQ;
 
 use Exception;
 use Illuminate\Container\Container;
+use Illuminate\Contracts\Debug\ExceptionHandler;
+use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Contracts\Queue\Factory as QueueManager;
 use Illuminate\Queue\Worker;
 use Illuminate\Queue\WorkerOptions;
 use PhpAmqpLib\Channel\AMQPChannel;
@@ -34,6 +37,35 @@ class Consumer extends Worker
 
     /** @var object|null */
     protected $currentJob;
+
+    /** @var array  */
+    protected array $config;
+
+    /**
+     * Create a new queue worker.
+     *
+     * @param  \Illuminate\Contracts\Queue\Factory  $manager
+     * @param  \Illuminate\Contracts\Events\Dispatcher  $events
+     * @param  \Illuminate\Contracts\Debug\ExceptionHandler  $exceptions
+     * @param  callable  $isDownForMaintenance
+     * @param  callable|null  $resetScope
+     * @return void
+     */
+    public function __construct(QueueManager $manager,
+        Dispatcher $events,
+        ExceptionHandler $exceptions,
+        callable $isDownForMaintenance,
+        callable $resetScope = null,
+        array $config
+    )
+    {
+        $this->events = $events;
+        $this->manager = $manager;
+        $this->exceptions = $exceptions;
+        $this->isDownForMaintenance = $isDownForMaintenance;
+        $this->resetScope = $resetScope;
+        $this->config = $config;
+    }
 
     public function setContainer(Container $value): void
     {

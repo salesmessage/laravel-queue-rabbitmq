@@ -22,6 +22,17 @@ class GarbageCollector extends Command
      */
     protected $description = 'Removes unused rabbitmq queues';
 
+    /** @var array  */
+    protected array $config;
+
+    /**
+     *
+     */
+    public function __construct(array $config)
+    {
+        $this->config = $config;
+    }
+
     /**
      * Execute the console command.
      *
@@ -30,10 +41,10 @@ class GarbageCollector extends Command
      */
     public function handle()
     {
-        $host = Illuminate\Support\Facades\Config::get('queue.connections.rabbitmq.hosts')[0]['host'];
-        $port = Illuminate\Support\Facades\Config::get('queue.connections.rabbitmq.hosts')[0]['api_port'];
-        $username = Illuminate\Support\Facades\Config::get('queue.connections.rabbitmq.hosts')[0]['user'];
-        $password = Illuminate\Support\Facades\Config::get('queue.connections.rabbitmq.hosts')[0]['password'];
+        $host = $this->config['hosts'][0]['host'];
+        $port = $this->config['hosts'][0]['api_port'];
+        $username = $this->config['hosts'][0]['user'];
+        $password = $this->config['hosts'][0]['password'];
         $client = new Client();
         $url = $host . ':' . $port;
         $res = $client->get(

@@ -37,7 +37,7 @@ class LaravelQueueRabbitMQServiceProvider extends ServiceProvider
 
             $this->app->singleton(BatchableConsumeCommand::class, static function ($app) {
                 return new BatchableConsumeCommand(
-                    BatchableConsumer::class,
+                    $this->app[BatchableConsumer::class],
                     $app['cache.store']
                 );
             });
@@ -57,7 +57,7 @@ class LaravelQueueRabbitMQServiceProvider extends ServiceProvider
 
             $this->app->singleton(ConsumeCommand::class, static function ($app) {
                 return new ConsumeCommand(
-                    Consumer::class,
+                    $this->app[Consumer::class],
                     $app['cache.store']
                 );
             });

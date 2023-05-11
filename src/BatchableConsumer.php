@@ -519,6 +519,9 @@ class BatchableConsumer extends Consumer
 
             $class::collection($batchData);
             $this->processed += count($this->currentMessages);
+            foreach ($this->currentMessages as $message) {
+                $this->connection->getChannel()->basic_ack($message->getDeliveryTag());
+            }
             return;
         }
 

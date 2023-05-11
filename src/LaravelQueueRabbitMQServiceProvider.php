@@ -5,6 +5,7 @@ namespace VladimirYuldashev\LaravelQueueRabbitMQ;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Queue\QueueManager;
 use Illuminate\Support\ServiceProvider;
+use VladimirYuldashev\LaravelQueueRabbitMQ\Console\BatchableConsumeCommand;
 use VladimirYuldashev\LaravelQueueRabbitMQ\Console\ConsumeCommand;
 use VladimirYuldashev\LaravelQueueRabbitMQ\Queue\Connectors\RabbitMQConnector;
 
@@ -21,12 +22,12 @@ class LaravelQueueRabbitMQServiceProvider extends ServiceProvider
         );
 
         if ($this->app->runningInConsole()) {
-            $this->app->singleton('rabbitmq.consumer', function () {
+            $this->app->singleton(BatchableConsumer::class, function () {
                 $isDownForMaintenance = function () {
                     return $this->app->isDownForMaintenance();
                 };
 
-                return new Consumer(
+                return new BatchableConsumer(
                     $this->app['queue'],
                     $this->app['events'],
                     $this->app[ExceptionHandler::class],
@@ -34,8 +35,8 @@ class LaravelQueueRabbitMQServiceProvider extends ServiceProvider
                 );
             });
 
-            $this->app->singleton(ConsumeCommand::class, static function ($app) {
-                return new ConsumeCommand(
+            $this->app->singleton(BatchableConsumeCommand::class, static function ($app) {
+                return new BatchableConsumeCommand(
                     $app['rabbitmq.consumer'],
                     $app['cache.store']
                 );
@@ -43,6 +44,7 @@ class LaravelQueueRabbitMQServiceProvider extends ServiceProvider
 
             $this->commands([
                 Console\ConsumeCommand::class,
+                Console\BatchableConsumeCommand::class,
             ]);
         }
 

@@ -383,10 +383,9 @@ class BatchableConsumer extends Consumer
     private function stopConsume()
     {
         logger()->info('Stop listening to queue', [
-            'currentConsumer' => $this->currentConsumer,
-            'workerName' => $this->name
+            'currentConsumer' => $this->consumerTag,
         ]);
-        $this->channel->basic_cancel($this->currentConsumer, true);
+        $this->channel->basic_cancel($this->consumerTag, true);
     }
 
     /**

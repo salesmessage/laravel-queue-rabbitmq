@@ -22,7 +22,7 @@ class LaravelQueueRabbitMQServiceProvider extends ServiceProvider
         );
 
         if ($this->app->runningInConsole()) {
-            $this->app->singleton('rabbitmq.consumer.batchable', function () {
+            $this->app->singleton(BatchableConsumer::class, function () {
                 $isDownForMaintenance = function () {
                     return $this->app->isDownForMaintenance();
                 };
@@ -37,12 +37,12 @@ class LaravelQueueRabbitMQServiceProvider extends ServiceProvider
 
             $this->app->singleton(BatchableConsumeCommand::class, static function ($app) {
                 return new BatchableConsumeCommand(
-                    $app['rabbitmq.consumer.batchable'],
+                    BatchableConsumer::class,
                     $app['cache.store']
                 );
             });
 
-            $this->app->singleton('rabbitmq.consumer', function () {
+            $this->app->singleton(Consumer::class, function () {
                 $isDownForMaintenance = function () {
                     return $this->app->isDownForMaintenance();
                 };
@@ -57,7 +57,7 @@ class LaravelQueueRabbitMQServiceProvider extends ServiceProvider
 
             $this->app->singleton(ConsumeCommand::class, static function ($app) {
                 return new ConsumeCommand(
-                    $app['rabbitmq.consumer'],
+                    Consumer::class,
                     $app['cache.store']
                 );
             });

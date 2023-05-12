@@ -54,7 +54,7 @@ class RabbitMQQueue extends Queue implements QueueContract, RabbitMQQueueContrac
     /**
      * Current job being processed.
      */
-    protected RabbitMQJob $currentJob;
+    protected ?RabbitMQJob $currentJob = null;
 
     /**
      * Holds the Configuration
@@ -577,7 +577,7 @@ class RabbitMQQueue extends Queue implements QueueContract, RabbitMQQueueContrac
      */
     public function close(): void
     {
-        if (! $this->currentJob->isDeletedOrReleased()) {
+        if ($this->currentJob && ! $this->currentJob->isDeletedOrReleased()) {
             $this->reject($this->currentJob, true);
         }
 

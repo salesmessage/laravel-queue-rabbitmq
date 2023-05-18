@@ -16,9 +16,6 @@ class RabbitMQQueueBatchable extends BaseRabbitMQQueue
 
     public function pushRaw($payload, $queue = null, array $options = []): int|string|null
     {
-        $options['exchange'] = 'ex.' . $queue;
-        $options['exchange_type'] = 'direct';
-        $options['exchange_routing_key'] = $queue;
         return parent::pushRaw($payload, $queue, $options);
     }
 }

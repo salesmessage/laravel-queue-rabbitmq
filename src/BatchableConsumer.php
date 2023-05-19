@@ -517,11 +517,20 @@ class BatchableConsumer extends Consumer
                 $batchData[] = $job->getPayloadData();
             }
 
-            $class::collection($batchData);
-            $this->processed += count($this->currentMessages);
-            foreach ($this->currentMessages as $message) {
-                $this->connection->getChannel()->basic_ack($message->getDeliveryTag());
+            $failed = false;
+            try {
+                $class::collection($batchData);
+            } catch (\Throwable $exception) {
+                $failed = true;
             }
+            foreach ($this->currentMessages as $message) {
+                if ($failed) {
+                    $this->processMessage($message);
+                } else {
+                    $this->connection->getChannel()->basic_ack($message->getDeliveryTag());
+                }
+            }
+            $this->processed += count($this->currentMessages);
             return;
         }
 

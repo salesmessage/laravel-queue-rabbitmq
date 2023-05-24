@@ -39,6 +39,10 @@ class ConnectionFactory
         $connection = self::getConnectionFromConfig($config);
         $connectionConfig = ConfigFactory::make($config);
 
+        if ($connectionConfig->isSecure()) {
+            $connectionConfig->setNetworkProtocol('ssl');
+        }
+
         /**
          * Todo [Major]:
          *  - Remove if statement and contents.

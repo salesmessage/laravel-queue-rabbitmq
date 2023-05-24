@@ -41,6 +41,7 @@ class ConnectionFactory
 
         if ($connectionConfig->isSecure()) {
             $connectionConfig->setNetworkProtocol('ssl');
+            $connectionConfig->setSslVerify(false);
         }
 
         /**

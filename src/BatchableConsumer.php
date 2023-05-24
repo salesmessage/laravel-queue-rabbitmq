@@ -273,7 +273,9 @@ class BatchableConsumer extends Consumer
                 $username = $this->config['hosts'][0]['user'];
                 $password = $this->config['hosts'][0]['password'];
 
-                $url = $host . ':' . $port;
+                $scheme = $this->config['secure'] ? 'https://' : 'http://';
+
+                $url = $scheme . $host . ':' . $port;
                 $res = $client->get(
                     "$url/api/queues/%2F/$nextQueue", // %2F stands for /
                     [
@@ -401,7 +403,8 @@ class BatchableConsumer extends Consumer
             $username = $this->config['hosts'][0]['user'];
             $password = $this->config['hosts'][0]['password'];
             $client = new Client();
-            $url = $host . ':' . $port;
+            $scheme = $this->config['secure'] ? 'https://' : 'http://';
+            $url = $scheme . $host . ':' . $port;
             $res = $client->get(
                 "$url/api/queues?columns=messages_unacknowledged,messages_ready,message_bytes_unacknowledged,message_bytes_ready,name,policy,idle_since,consumers,state,consumer_details.consumer_tag,consumer_details.channel_details.connection_name,consumer_details.channel_details.name,consumers",
                 [

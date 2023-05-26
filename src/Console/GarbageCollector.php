@@ -22,7 +22,7 @@ class GarbageCollector extends Command
      */
     protected $description = 'Removes unused rabbitmq queues';
 
-    /** @var array  */
+    /** @var array */
     protected array $config;
 
     /**
@@ -41,6 +41,7 @@ class GarbageCollector extends Command
      */
     public function handle()
     {
+        $scheme = $this->config['secure'] ? 'https://' : 'http://';
         $host = $this->config['hosts'][0]['host'];
         $port = $this->config['hosts'][0]['api_port'];
         $username = $this->config['hosts'][0]['user'];
@@ -48,7 +49,7 @@ class GarbageCollector extends Command
         $client = new Client();
         $url = $host . ':' . $port;
         $res = $client->get(
-            "$url/api/queues",
+            "{$scheme}{$url}/api/queues",
             [
                 'headers' => [
                     'Authorization' => 'Basic ' . base64_encode(
@@ -61,17 +62,24 @@ class GarbageCollector extends Command
         $queuesToRemove = collect($queues)
             ->filter(function ($queue) {
                 $messages = $queue->messages ?? 0;
-                return $queue->name !== 'default' && !str_contains($queue->name, 'failed.') && $messages === 0 && $queue->messages_details->rate === 0.0 && $queue->messages_ready_details->rate === 0.0 && $queue->messages_unacknowledged_details->rate === 0.0;
+                return $queue->name !== 'default' && !str_contains(
+                        $queue->name,
+                        'failed'
+                    ) && !str_contains(
+                        $queue->name,
+                        'dlq'
+                    ) && $messages === 0 && $queue->messages_details->rate === 0.0
+                    && $queue->messages_ready_details->rate === 0.0
+                    && $queue->messages_unacknowledged_details->rate === 0.0;
             })
             ->pluck('name')
             ->values()
             ->toArray();
 
-        foreach ($queuesToRemove as $queue)
-        {
+        foreach ($queuesToRemove as $queue) {
             try {
                 $client->delete(
-                    "$url/api/queues/%2F/$queue", // %2F stands for /
+                    "$url/api/queues/%2F/{$queue}?if-empty=true&if-unused=true", // %2F stands for /
                     [
                         'headers' => [
                             'Authorization' => 'Basic ' . base64_encode(

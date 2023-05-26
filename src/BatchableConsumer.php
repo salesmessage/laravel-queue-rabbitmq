@@ -156,7 +156,7 @@ class BatchableConsumer extends Consumer
                 $this->kill(self::EXIT_ERROR, $options);
             } catch (AMQPTimeoutException) {
                 if ($this->prefetchCount > 1) {
-                    logger()->info('Timeout reached. Processing what is left', [
+                    logger()->info('RabbitMQConsumer.prefetch.timeout', [
                         'timeout' => (int)$options->timeout,
                         'workerName' => $this->name,
                         'messagesReady' => count($this->currentMessages)
@@ -291,7 +291,7 @@ class BatchableConsumer extends Consumer
                         ($queueData->arguments->{'x-single-active-consumer'} ?? false) === true
                         && $queueData->consumers > 0
                     )) {
-                    logger()->info('Precheck failed for queue', [
+                    logger()->info('RabbitMQConsumer.queues.precheck.failed', [
                         'queue' => $nextQueue,
                         'workerName' => $this->name,
                         'single-active' => $queueData->arguments->{'x-single-active-consumer'} ?? false,
@@ -314,7 +314,7 @@ class BatchableConsumer extends Consumer
         $this->currentMessages[] = $message;
         $this->processedJob++;
         if ($this->processedJob >= $this->prefetchCount) {
-            logger()->info('Processing batch', [
+            logger()->info('RabbitMQConsumer.batch.process', [
                 'workerName' => $this->name,
                 'batchCount' => count($this->currentMessages),
             ]);
@@ -335,7 +335,7 @@ class BatchableConsumer extends Consumer
      */
     private function singleHandler(AMQPMessage $message)
     {
-        logger()->info('Processing single', [
+        logger()->info('RabbitMQConsumer.single.process', [
             'workerName' => $this->name,
             'messageBody' => $message->getBody(),
         ]);
@@ -363,11 +363,6 @@ class BatchableConsumer extends Consumer
             }
         };
 
-        logger()->info('Started listening to queue ' . $queue, [
-            'queue' => $queue,
-            'workerName' => $this->name
-        ]);
-
         $this->channel->basic_consume(
             $queue,
             $this->consumerTag,
@@ -384,9 +379,6 @@ class BatchableConsumer extends Consumer
      */
     private function stopConsume()
     {
-        logger()->info('Stop listening to queue', [
-            'currentConsumer' => $this->consumerTag,
-        ]);
         $this->channel->basic_cancel($this->consumerTag, true);
     }
 
@@ -427,12 +419,9 @@ class BatchableConsumer extends Consumer
 
             $this->currentQueues = $queues;
             if (count($this->currentQueues) === 0) {
-                logger()->info('No queues found', [
-                    'workerName' => $this->name
-                ]);
                 $this->sleep($this->options->sleep);
             } else {
-                logger()->info('Discovered queues', [
+                logger()->info('RabbitMQConsumer.queues.discovered', [
                     'workerName' => $this->name,
                     'queues' => collect($queues)->implode(', ')
                 ]);
@@ -495,13 +484,13 @@ class BatchableConsumer extends Consumer
     private function processJobs()
     {
         if (count($this->currentMessages) === 0) {
-            logger()->warning('No jobs to process', [
+            logger()->warning('RabbitMQConsumer.jobs.empty', [
                 'workerName' => $this->name,
             ]);
             return;
         }
 
-        logger()->warning('Processing jobs', [
+        logger()->info('RabbitMQConsumer.jobs.processing', [
             'workerName' => $this->name,
             'jobsCount' => count($this->currentMessages)
         ]);

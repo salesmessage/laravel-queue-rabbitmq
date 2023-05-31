@@ -86,6 +86,7 @@ class LaravelQueueRabbitMQServiceProvider extends ServiceProvider
             Console\QueueDeclareCommand::class,
             Console\QueueDeleteCommand::class,
             Console\QueuePurgeCommand::class,
+            Console\GarbageCollector::class,
         ]);
     }
 

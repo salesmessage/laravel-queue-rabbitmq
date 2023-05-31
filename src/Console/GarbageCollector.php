@@ -31,6 +31,7 @@ class GarbageCollector extends Command
     public function __construct(array $config)
     {
         $this->config = $config;
+        parent::__construct();
     }
 
     /**
@@ -68,7 +69,7 @@ class GarbageCollector extends Command
                     ) && !str_contains(
                         $queue->name,
                         'dlq'
-                    ) && $messages === 0 && $queue->messages_details->rate === 0.0
+                    ) && $messages === 0 && ($queue->messages_details?->rate ?? 0) === 0.0
                     && $queue->messages_ready_details->rate === 0.0
                     && $queue->messages_unacknowledged_details->rate === 0.0;
             })
@@ -79,7 +80,7 @@ class GarbageCollector extends Command
         foreach ($queuesToRemove as $queue) {
             try {
                 $client->delete(
-                    "$url/api/queues/%2F/{$queue}?if-empty=true&if-unused=true", // %2F stands for /
+                    "{$scheme}$url/api/queues/%2F/{$queue}?if-empty=true&if-unused=true", // %2F stands for /
                     [
                         'headers' => [
                             'Authorization' => 'Basic ' . base64_encode(
@@ -88,7 +89,7 @@ class GarbageCollector extends Command
                         ]
                     ]
                 );
-                $this->info("Delete $queue queue");
+                $this->info("RabbitMQ. Delete $queue queue");
             } catch (\Throwable $exception) {
                 $this->warn("Was not able to remove $queue with error {$exception->getMessage()}");
                 logger()->error('RabbitMQ Garbage Collector failed to remove queue', [

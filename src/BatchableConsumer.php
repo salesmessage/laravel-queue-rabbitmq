@@ -265,6 +265,7 @@ class BatchableConsumer extends Consumer
     {
         do {
             $nextQueue = $this->nextQueueRoundRobin($first);
+            $queueIsNotReady = false;
             if ($this->preCheck) {
                 $client = new Client();
 
@@ -287,10 +288,8 @@ class BatchableConsumer extends Consumer
                     ]
                 );
                 $queueData = json_decode($res->getBody());
-                if ($queueData->messages_ready === 0 || (
-                        ($queueData->arguments->{'x-single-active-consumer'} ?? false) === true
-                        && $queueData->consumers > 0
-                    )) {
+                if (($queueData->messages_ready ?? 0) === 0 || $queueData->consumers > 2) {
+                    $queueIsNotReady = true;
                     logger()->info('RabbitMQConsumer.queues.precheck.failed', [
                         'queue' => $nextQueue,
                         'workerName' => $this->name,
@@ -299,7 +298,7 @@ class BatchableConsumer extends Consumer
                     ]);
                 }
             }
-        } while ($this->preCheck && ($queueData->messages_ready ?? 0) === 0);
+        } while ($this->preCheck && $queueIsNotReady);
 
         return $nextQueue;
     }
@@ -414,10 +413,15 @@ class BatchableConsumer extends Consumer
                     return str_starts_with($queue->name, $this->mask) && (($this->roundRobin && $readyMessages > 0) || !$this->roundRobin);
                 })
                 ->pluck('name')
-                ->values()
-                ->toArray();
+                ->values();
 
-            $this->currentQueues = $queues;
+            // Shuffle $queues collection randomly
+            if ($this->roundRobin) {
+                $queues = $queues->shuffle();
+            }
+
+            $this->currentQueues = $queues->toArray();
+
             if (count($this->currentQueues) === 0) {
                 $this->sleep($this->options->sleep);
             } else {

@@ -60,7 +60,7 @@ class BatchableConsumeCommand extends WorkCommand
         $consumer->setRoundRobin((bool) $this->option('roundrobin'));
         $consumer->setAutoPrefetch((bool) $this->option('auto-prefetch'));
 
-        $timeoutsMapping = $this->option('max-priority');
+        $timeoutsMapping = $this->option('timeouts-mapping');
         if ($timeoutsMapping !== 'false') {
             $timeouts = explode(';', $timeoutsMapping);
             foreach ($timeouts as &$timeout) {

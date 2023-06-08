@@ -50,6 +50,18 @@ class BatchableConsumer extends Consumer
     /** @var WorkerOptions  */
     private WorkerOptions $options;
 
+    /** @var int $currentPrefetch */
+    private int $currentPrefetch = 0;
+
+    /** @var int $currentTimeout */
+    private int $currentTimeout = 0;
+
+    /** @var bool $autoPrefetch */
+    private bool $autoPrefetch = false;
+
+    /** @var null|array $timeoutsMapping */
+    private ?array $timeoutsMapping = null;
+
 
     /**
      * The name and signature of the console command.
@@ -90,6 +102,22 @@ class BatchableConsumer extends Consumer
     }
 
     /**
+     * @param bool $value
+     */
+    public function setAutoPrefetch(bool $value): void
+    {
+        $this->autoPrefetch = $value;
+    }
+
+    /**
+     * @param array $value
+     */
+    public function setTimeoutsMapping(array $value): void
+    {
+        $this->timeoutsMapping = $value;
+    }
+
+    /**
      * @return string
      */
     public function getMask(): string
@@ -125,12 +153,6 @@ class BatchableConsumer extends Consumer
 
         $this->channel = $this->connection->getChannel();
 
-        $this->channel->basic_qos(
-            $this->prefetchSize,
-            $this->prefetchCount,
-            true
-        );
-
         $arguments = [];
         if ($this->maxPriority) {
             $arguments['priority'] = ['I', $this->maxPriority];
@@ -149,15 +171,23 @@ class BatchableConsumer extends Consumer
 
             // If the daemon should run (not in maintenance mode, etc.), then we can wait for a job.
             try {
-                $this->channel->wait(null, false, (int)$options->timeout);
+                if (!$this->channel->getConnection()) {
+                    logger()->info('RabbitMQConsumer.connection.broken.kill', [
+                        'workerName' => $this->name,
+                    ]);
+                    $this->kill(self::EXIT_ERROR, $options);
+                    continue;
+                }
+
+                $this->channel->wait(null, false, $this->currentTimeout);
             } catch (AMQPRuntimeException $exception) {
                 $this->exceptions->report($exception);
 
                 $this->kill(self::EXIT_ERROR, $options);
             } catch (AMQPTimeoutException) {
-                if ($this->prefetchCount > 1) {
+                if ($this->currentPrefetch > 1) {
                     logger()->info('RabbitMQConsumer.prefetch.timeout', [
-                        'timeout' => (int)$options->timeout,
+                        'timeout' => $this->currentTimeout,
                         'workerName' => $this->name,
                         'messagesReady' => count($this->currentMessages)
                     ]);
@@ -288,7 +318,7 @@ class BatchableConsumer extends Consumer
                     ]
                 );
                 $queueData = json_decode($res->getBody());
-                if (($queueData->messages_ready ?? 0) === 0 || $queueData->consumers > 2) {
+                if (($queueData->messages_ready ?? 0) === 0 || ($queueData->consumers ?? 0) >= 2) {
                     $queueIsNotReady = true;
                     logger()->info('RabbitMQConsumer.queues.precheck.failed', [
                         'queue' => $nextQueue,
@@ -296,6 +326,28 @@ class BatchableConsumer extends Consumer
                         'single-active' => $queueData->arguments->{'x-single-active-consumer'} ?? false,
                         'active-consumers' => $queueData->consumers,
                     ]);
+                } else {
+                    if ($this->autoPrefetch) {
+                        $this->currentPrefetch = ($queueData->messages_ready ?? $this->prefetchCount) >= $this->prefetchCount ?: $queueData->messages_ready;
+                    } else {
+                        $this->currentPrefetch = $this->prefetchCount;
+                    }
+                    $this->channel->basic_qos(
+                        $this->prefetchSize,
+                        $this->currentPrefetch,
+                        true
+                    );
+
+                    $messages = $queueData->messages_ready ?? 0;
+                    $this->currentTimeout = (int) $this->options->timeout;
+                    if ($this->timeoutsMapping) {
+                        foreach ($this->timeoutsMapping as $mapping) {
+                            if ($mapping['range'] <= $messages) {
+                                $this->currentTimeout = $mapping['timeout'];
+                                break;
+                            }
+                        }
+                    }
                 }
             }
         } while ($this->preCheck && $queueIsNotReady);
@@ -312,7 +364,7 @@ class BatchableConsumer extends Consumer
     {
         $this->currentMessages[] = $message;
         $this->processedJob++;
-        if ($this->processedJob >= $this->prefetchCount) {
+        if ($this->processedJob >= $this->currentPrefetch) {
             logger()->info('RabbitMQConsumer.batch.process', [
                 'workerName' => $this->name,
                 'batchCount' => count($this->currentMessages),
@@ -355,7 +407,7 @@ class BatchableConsumer extends Consumer
     private function startConsuming(string $queue)
     {
         $callback = function (AMQPMessage $message) use ($queue, &$callback): void {
-            if ($this->prefetchCount > 1) {
+            if ($this->currentPrefetch > 1) {
                 $this->batchHandler($message);
             } else {
                 $this->singleHandler($message);

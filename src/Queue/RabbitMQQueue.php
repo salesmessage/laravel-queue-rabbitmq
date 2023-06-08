@@ -399,11 +399,7 @@ class RabbitMQQueue extends Queue implements QueueContract, RabbitMQQueueContrac
     public function isQueueExists(string $name = null): bool
     {
         $queueName = $this->getQueue($name);
-
-        if ($this->isQueueDeclared($queueName)) {
-            return true;
-        }
-
+        
         try {
             // create a temporary channel, so the main channel will not be closed on exception
             $channel = $this->createChannel();
@@ -583,7 +579,7 @@ class RabbitMQQueue extends Queue implements QueueContract, RabbitMQQueueContrac
 
         try {
             $this->getConnection()->close();
-        } catch (ErrorException) {
+        } catch (\Throwable) {
             // Ignore the exception
         }
     }

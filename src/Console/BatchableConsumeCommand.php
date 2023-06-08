@@ -26,6 +26,8 @@ class BatchableConsumeCommand extends WorkCommand
                             {--tries=1 : Number of times to attempt a job before logging it failed}
                             {--rest=0 : Number of seconds to rest between jobs}
                             {--precheck=1 : Runs precheck before switching to queue}
+                            {--auto-prefetch=1 : Enabled prefetch adjusting depending on queue}
+                            {--timeouts-mapping=false : Enabled prefetch adjusting depending on queue. Example "20:500;40:1000" }
                             {--roundrobin=1 : Consumer goes between queues one-by-one(round-robin style)}
 
                             {--max-priority=}
@@ -56,6 +58,21 @@ class BatchableConsumeCommand extends WorkCommand
         $consumer->setMask((string) $this->option('mask'));
         $consumer->setPreCheck((bool) $this->option('precheck'));
         $consumer->setRoundRobin((bool) $this->option('roundrobin'));
+        $consumer->setAutoPrefetch((bool) $this->option('auto-prefetch'));
+
+        $timeoutsMapping = $this->option('max-priority');
+        if ($timeoutsMapping !== 'false') {
+            $timeouts = explode(';', $timeoutsMapping);
+            foreach ($timeouts as &$timeout) {
+                $values = explode(':', $timeout);
+                $timeout = [
+                    'range' => $values[0],
+                    'timeout' => $values[1],
+                ];
+            }
+            $timeouts = collect($timeouts)->sortBy('range')->values();
+            $consumer->setTimeoutsMapping($timeouts);
+        }
 
         if ($this->downForMaintenance() && $this->option('once')) {
             $this->worker->sleep($this->option('sleep'));

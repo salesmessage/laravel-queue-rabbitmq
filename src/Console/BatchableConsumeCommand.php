@@ -70,7 +70,7 @@ class BatchableConsumeCommand extends WorkCommand
                     'timeout' => $values[1],
                 ];
             }
-            $timeouts = collect($timeouts)->sortBy('range')->values();
+            $timeouts = collect($timeouts)->sortBy('range')->values()->toArray();
             $consumer->setTimeoutsMapping($timeouts);
         }
 

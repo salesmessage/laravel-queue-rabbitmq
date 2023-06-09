@@ -342,7 +342,7 @@ class BatchableConsumer extends Consumer
                     $this->currentTimeout = (int) $this->options->timeout;
                     if ($this->timeoutsMapping) {
                         foreach ($this->timeoutsMapping as $mapping) {
-                            if ($mapping['range'] <= $messages) {
+                            if ($mapping['range'] >= $messages) {
                                 $this->currentTimeout = $mapping['timeout'];
                                 break;
                             }

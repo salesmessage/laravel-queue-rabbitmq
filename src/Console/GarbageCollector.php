@@ -92,7 +92,7 @@ class GarbageCollector extends Command
                 $this->info("RabbitMQ. Delete $queue queue");
             } catch (\Throwable $exception) {
                 $this->warn("Was not able to remove $queue with error {$exception->getMessage()}");
-                logger()->error('RabbitMQ Garbage Collector failed to remove queue', [
+                logger()->warning('RabbitMQ Garbage Collector failed to remove queue', [
                     'queue' => $queue,
                     'message' => $exception->getMessage(),
                     'trace' => $exception->getTraceAsString()

@@ -332,11 +332,31 @@ class BatchableConsumer extends Consumer
                     } else {
                         $this->currentPrefetch = $this->prefetchCount;
                     }
-                    $this->channel->basic_qos(
-                        $this->prefetchSize,
-                        $this->currentPrefetch,
-                        true
-                    );
+                    $this->channel->getConnection()->checkHeartBeat();
+                    try {
+                        $this->channel->basic_qos(
+                            $this->prefetchSize,
+                            $this->currentPrefetch,
+                            true
+                        );
+                    } catch (\Throwable $exception) {
+                        logger()->warning('RabbitMQConsumer.basic_qos.failed', [
+                            'exception' => [
+                                'message' => $exception->getMessage(),
+                                'trace' => $exception->getTraceAsString(),
+                            ],
+                            'queue' => $nextQueue,
+                            'workerName' => $this->name,
+                            'single-active' => $queueData->arguments->{'x-single-active-consumer'} ?? false,
+                            'active-consumers' => $queueData->consumers,
+                        ]);
+                        $this->channel->basic_qos(
+                            $this->prefetchSize,
+                            $this->currentPrefetch,
+                            true
+                        );
+                        $this->channel->getConnection()->checkHeartBeat();
+                    }
 
                     $messages = $queueData->messages_ready ?? 0;
                     $this->currentTimeout = (int) $this->options->timeout;

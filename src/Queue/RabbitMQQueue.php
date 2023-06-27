@@ -399,7 +399,7 @@ class RabbitMQQueue extends Queue implements QueueContract, RabbitMQQueueContrac
     public function isQueueExists(string $name = null): bool
     {
         $queueName = $this->getQueue($name);
-        
+
         try {
             // create a temporary channel, so the main channel will not be closed on exception
             $channel = $this->createChannel();
@@ -694,11 +694,6 @@ class RabbitMQQueue extends Queue implements QueueContract, RabbitMQQueueContrac
         // When an exchange is provided and no exchange is present in RabbitMQ, create an exchange.
         if ($exchange && ! $this->isExchangeExists($exchange)) {
             $this->declareExchange($exchange, $exchangeType);
-        }
-
-        // When an exchange is provided, just return.
-        if ($exchange) {
-            return;
         }
 
         // When the queue already exists, just return.

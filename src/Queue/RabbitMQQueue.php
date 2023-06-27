@@ -427,7 +427,8 @@ class RabbitMQQueue extends Queue implements QueueContract, RabbitMQQueueContrac
         bool $autoDelete = false,
         array $arguments = []
     ): void {
-        $this->getChannel()->queue_declare(
+        $channel = $this->createChannel();
+        $channel->queue_declare(
             $name,
             false,
             $durable,
@@ -436,6 +437,7 @@ class RabbitMQQueue extends Queue implements QueueContract, RabbitMQQueueContrac
             false,
             new AMQPTable($arguments)
         );
+        $channel->close();
     }
 
     /**

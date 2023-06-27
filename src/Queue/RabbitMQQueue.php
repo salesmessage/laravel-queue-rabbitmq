@@ -427,10 +427,6 @@ class RabbitMQQueue extends Queue implements QueueContract, RabbitMQQueueContrac
         bool $autoDelete = false,
         array $arguments = []
     ): void {
-        if ($this->isQueueDeclared($name)) {
-            return;
-        }
-
         $this->getChannel()->queue_declare(
             $name,
             false,

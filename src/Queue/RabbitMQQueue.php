@@ -695,11 +695,11 @@ class RabbitMQQueue extends Queue implements QueueContract, RabbitMQQueueContrac
         if ($exchange && ! $this->isExchangeExists($exchange)) {
             $this->declareExchange($exchange, $exchangeType);
         }
-
-        // When the queue already exists, just return.
-        if ($this->isQueueExists($destination)) {
-            return;
-        }
+//
+//        // When the queue already exists, just return.
+//        if ($this->isQueueExists($destination)) {
+//            return;
+//        }
 
         // Create a queue for amq.direct publishing.
         $this->declareQueue($destination, true, false, $this->getQueueArguments($destination));

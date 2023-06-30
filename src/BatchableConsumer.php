@@ -324,7 +324,7 @@ class BatchableConsumer extends Consumer
                         'queue' => $nextQueue,
                         'workerName' => $this->name,
                         'single-active' => $queueData->arguments->{'x-single-active-consumer'} ?? false,
-                        'active-consumers' => $queueData->consumers,
+                        'active-consumers' => $queueData->consumers ?? 0,
                     ]);
                 } else {
                     if ($this->autoPrefetch) {
@@ -332,8 +332,9 @@ class BatchableConsumer extends Consumer
                     } else {
                         $this->currentPrefetch = $this->prefetchCount;
                     }
-                    $this->channel->getConnection()->checkHeartBeat();
                     try {
+                        $this->channel->getConnection()->checkHeartBeat();
+
                         $this->channel->basic_qos(
                             $this->prefetchSize,
                             $this->currentPrefetch,
@@ -350,12 +351,13 @@ class BatchableConsumer extends Consumer
                             'single-active' => $queueData->arguments->{'x-single-active-consumer'} ?? false,
                             'active-consumers' => $queueData->consumers,
                         ]);
+                        $this->channel->getConnection()->checkHeartBeat();
+
                         $this->channel->basic_qos(
                             $this->prefetchSize,
                             $this->currentPrefetch,
                             true
                         );
-                        $this->channel->getConnection()->checkHeartBeat();
                     }
 
                     $messages = $queueData->messages_ready ?? 0;

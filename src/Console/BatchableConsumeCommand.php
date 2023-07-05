@@ -92,6 +92,14 @@ class BatchableConsumeCommand extends WorkCommand
             );
         }
 
+        if (function_exists('\Co\run')) {
+            return \Co\run(function () use ($connection, $queue) {
+                $this->runWorker(
+                    $connection, $queue
+                );
+            });
+        }
+
         return $this->runWorker(
             $connection, $queue
         );

@@ -159,6 +159,7 @@ class BatchableConsumer extends Consumer
         }
 
         $this->start();
+        $this->startHearbeatCheck();
 
         while (true) {
             // Before reserving any jobs, we will make sure this queue is not paused and
@@ -609,5 +610,22 @@ class BatchableConsumer extends Consumer
             $this->processMessage($message);
         }
         $this->processed += count($this->currentMessages);
+    }
+
+    private function startHearbeatCheck()
+    {
+        $hearbeatInterval = $this->config['options']['heartbeat'] ?? 0;
+        if (!$hearbeatInterval) {
+            return;
+        }
+
+        if (function_exists('\go')) {
+            \go(function () use ($hearbeatInterval) {
+                while (true) {
+                    \Co::sleep($hearbeatInterval);
+                    $this->channel->getConnection()->checkHeartBeat();
+                }
+            });
+        }
     }
 }

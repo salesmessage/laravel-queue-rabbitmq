@@ -164,7 +164,7 @@ class RabbitMQQueue extends Queue implements QueueContract, RabbitMQQueueContrac
         [$mainDestination, $exchange, $exchangeType, $attempts] = $this->publishProperties($queue, $options);
         $this->declareDestination($mainDestination, $exchange, $exchangeType);
 
-        $destination = $this->getQueue($queue).'.delay.'.$ttl;
+        $destination = 'delay.' . $ttl . '.' . $this->getQueue($queue);
 
         $this->declareQueue($destination, true, false, $this->getDelayQueueArguments($this->getQueue($queue), $ttl));
 

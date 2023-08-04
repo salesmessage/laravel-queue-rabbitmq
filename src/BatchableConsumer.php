@@ -422,6 +422,11 @@ class BatchableConsumer extends Consumer
             }
         };
 
+        logger()->info('RabbitMQConsumer.queues.startConsuming', [
+            'workerName' => $this->name,
+            'newQueue' => $queue
+        ]);
+
         $this->channel->basic_consume(
             $queue,
             $this->consumerTag,

@@ -341,11 +341,12 @@ class BatchableConsumer extends Consumer
                     }
                 }
 
-                if ($this->autoPrefetch) {
-                    $this->currentPrefetch = ($queueData->messages_ready ?? $this->prefetchCount) >= $this->prefetchCount ? $this->prefetchCount : $queueData->messages_ready;
+                if ($this->autoPrefetch && $messages > 0) {
+                    $this->currentPrefetch = $messages >= $this->prefetchCount ? $this->prefetchCount : $messages;
                     logger()->info('RabbitMQConsumer.queues.currentPrefetch.set', [
                         'queue' => $nextQueue,
                         'workerName' => $this->name,
+                        'prefetchCount' => $this->prefetchCount,
                         'currentPrefetch' => $this->currentPrefetch,
                         'messagesReady' => $messages
                     ]);

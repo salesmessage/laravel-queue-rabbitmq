@@ -329,6 +329,11 @@ class BatchableConsumer extends Consumer
 
                 $messages = $queueData->messages_ready ?? 0;
 
+                logger()->info('RabbitMQConsumer.queues.dataRetrieved', [
+                    'queue' => $nextQueue,
+                    'messagesReady' => $messages
+                ]);
+
                 if ($this->preCheck) {
                     if ($messages === 0 || ($queueData->consumers ?? 0) >= 2) {
                         $queueIsNotReady = true;

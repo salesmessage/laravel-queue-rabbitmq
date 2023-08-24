@@ -2,6 +2,7 @@
 
 namespace VladimirYuldashev\LaravelQueueRabbitMQ;
 
+use GuzzleHttp\Exception\RequestException;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Queue\Factory as QueueManager;
@@ -315,16 +316,29 @@ class BatchableConsumer extends Consumer
                 $scheme = $this->config['secure'] ? 'https://' : 'http://';
 
                 $url = $scheme . $host . ':' . $port;
-                $res = $client->get(
-                    "$url/api/queues/%2F/$nextQueue", // %2F stands for /
-                    [
-                        'headers' => [
-                            'Authorization' => 'Basic ' . base64_encode(
-                                    $username . ':' . $password
-                                )
+
+                try {
+                    $res = $client->get(
+                        "$url/api/queues/%2F/$nextQueue", // %2F stands for /
+                        [
+                            'headers' => [
+                                'Authorization' => 'Basic ' . base64_encode(
+                                        $username . ':' . $password
+                                    )
+                            ]
                         ]
-                    ]
-                );
+                    );
+                } catch (RequestException $e) {
+                    if ((int) $e->getCode() === 404) {
+                        logger()->warning('RabbitMQConsumer.discoverNextQueue.queueNotFound', [
+                            'queue' => $nextQueue,
+                        ]);
+                        $queueIsNotReady = true;
+                        continue;
+                    }
+                    throw $e;
+                }
+
                 $queueData = json_decode($res->getBody());
 
                 $messages = $queueData->messages_ready ?? 0;

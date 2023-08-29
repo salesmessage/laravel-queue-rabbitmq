@@ -301,6 +301,7 @@ class BatchableConsumer extends Consumer
     {
         do {
             $nextQueue = $this->nextQueueRoundRobin($first);
+            $first = false;
             $queueIsNotReady = false;
             $this->currentPrefetch = $this->prefetchCount;
             $this->currentTimeout = (int) $this->options->timeout;

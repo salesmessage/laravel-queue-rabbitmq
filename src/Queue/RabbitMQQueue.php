@@ -498,6 +498,12 @@ class RabbitMQQueue extends Queue implements QueueContract, RabbitMQQueueContrac
      */
     public function reject(RabbitMQJob $job, bool $requeue = false): void
     {
+        logger()->error('RabbitMQJob.markAsFailed.reject', [
+            'queue' => $job->getQueue(),
+            'message' => $job->getRabbitMQMessage(),
+            'trace' => debug_backtrace(options: DEBUG_BACKTRACE_IGNORE_ARGS),
+        ]);
+
         $this->getChannel()->basic_reject($job->getRabbitMQMessage()->getDeliveryTag(), $requeue);
     }
 

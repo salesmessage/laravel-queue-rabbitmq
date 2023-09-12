@@ -41,6 +41,10 @@ class Consumer extends Worker
     /** @var array  */
     protected array $config;
 
+    protected bool $asyncMode = false;
+
+    protected int $consumeInterval = 60;
+
     /**
      * Create a new queue worker.
      *
@@ -90,6 +94,30 @@ class Consumer extends Worker
     public function setPrefetchCount(int $value): void
     {
         $this->prefetchCount = $value;
+    }
+
+    /**
+     * @return bool
+     */
+    public function isAsyncMode(): bool
+    {
+        return $this->asyncMode;
+    }
+
+    /**
+     * @param bool $asyncMode
+     */
+    public function setAsyncMode(bool $asyncMode): void
+    {
+        $this->asyncMode = $asyncMode;
+    }
+
+    /**
+     * @param int $consumeInterval
+     */
+    public function setConsumeInterval(int $consumeInterval): void
+    {
+        $this->consumeInterval = $consumeInterval;
     }
 
     /**

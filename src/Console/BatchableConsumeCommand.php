@@ -23,12 +23,14 @@ class BatchableConsumeCommand extends WorkCommand
                             {--memory=128 : The memory limit in megabytes}
                             {--sleep=3 : Number of seconds to sleep when no job is available}
                             {--timeout=60 : The number of seconds a child process can run}
+                            {--consume-interval=60 : Time interval in sec when consumer should check queues and then handle messages}
+                            {--consume-interval-mapping=false : Enabled prefetch adjusting depending on queue. Example "20:500;40:1000" }
                             {--tries=1 : Number of times to attempt a job before logging it failed}
                             {--rest=0 : Number of seconds to rest between jobs}
                             {--precheck=1 : Runs precheck before switching to queue}
                             {--auto-prefetch=1 : Enabled prefetch adjusting depending on queue}
-                            {--timeouts-mapping=false : Enabled prefetch adjusting depending on queue. Example "20:500;40:1000" }
                             {--roundrobin=1 : Consumer goes between queues one-by-one(round-robin style)}
+                            {--async-mode=0 : Async processing for some functionality (now only "heartbeat" is supported)}
 
                             {--max-priority=}
                             {--consumer-tag}
@@ -59,19 +61,21 @@ class BatchableConsumeCommand extends WorkCommand
         $consumer->setPreCheck((bool) $this->option('precheck'));
         $consumer->setRoundRobin((bool) $this->option('roundrobin'));
         $consumer->setAutoPrefetch((bool) $this->option('auto-prefetch'));
+        $consumer->setAsyncMode((bool) $this->option('async-mode'));
+        $consumer->setConsumeInterval((int) $this->option('consume-interval'));
 
-        $timeoutsMapping = $this->option('timeouts-mapping');
-        if ($timeoutsMapping !== 'false') {
-            $timeouts = explode(';', $timeoutsMapping);
-            foreach ($timeouts as &$timeout) {
-                $values = explode(':', $timeout);
-                $timeout = [
+        $consumeIntervalMapping = $this->option('consume-interval-mapping');
+        if ($consumeIntervalMapping !== 'false') {
+            $intervals = explode(';', $consumeIntervalMapping);
+            foreach ($intervals as &$interval) {
+                $values = explode(':', $interval);
+                $interval = [
                     'range' => $values[0],
-                    'timeout' => $values[1],
+                    'interval' => $values[1],
                 ];
             }
-            $timeouts = collect($timeouts)->sortBy('range')->values()->toArray();
-            $consumer->setTimeoutsMapping($timeouts);
+            $intervals = collect($intervals)->sortBy('range')->values()->toArray();
+            $consumer->setConsumeIntervalMapping($intervals);
         }
 
         if ($this->downForMaintenance() && $this->option('once')) {
@@ -92,7 +96,11 @@ class BatchableConsumeCommand extends WorkCommand
             );
         }
 
-        if (function_exists('\Co\run')) {
+        if ($consumer->isAsyncMode()) {
+            if (!function_exists('\Co\run')) {
+                throw new \Exception('Async mode is not supported');
+            }
+            logger()->info('RabbitMQConsumer.AsyncMode.On');
             return \Co\run(function () use ($connection, $queue) {
                 $this->runWorker(
                     $connection, $queue

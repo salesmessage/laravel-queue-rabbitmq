@@ -3,9 +3,6 @@
 namespace VladimirYuldashev\LaravelQueueRabbitMQ;
 
 use GuzzleHttp\Exception\RequestException;
-use Illuminate\Contracts\Debug\ExceptionHandler;
-use Illuminate\Contracts\Events\Dispatcher;
-use Illuminate\Contracts\Queue\Factory as QueueManager;
 use VladimirYuldashev\LaravelQueueRabbitMQ\Interfaces\RabbitMQBatchable;
 use GuzzleHttp\Client;
 use Illuminate\Contracts\Queue\Queue;
@@ -13,7 +10,6 @@ use Illuminate\Queue\WorkerOptions;
 use PhpAmqpLib\Exception\AMQPRuntimeException;
 use PhpAmqpLib\Exception\AMQPTimeoutException;
 use PhpAmqpLib\Message\AMQPMessage;
-use VladimirYuldashev\LaravelQueueRabbitMQ\Consumer;
 use VladimirYuldashev\LaravelQueueRabbitMQ\Queue\Jobs\RabbitMQJob;
 
 class BatchableConsumer extends Consumer
@@ -54,14 +50,14 @@ class BatchableConsumer extends Consumer
     /** @var int $currentPrefetch */
     private int $currentPrefetch = 0;
 
-    /** @var int $currentTimeout */
-    private int $currentTimeout = 0;
+    /** @var int $currentConsumeInterval */
+    private int $currentConsumeInterval = 0;
 
     /** @var bool $autoPrefetch */
     private bool $autoPrefetch = false;
 
-    /** @var null|array $timeoutsMapping */
-    private ?array $timeoutsMapping = null;
+    /** @var null|array $consumeIntervalMapping */
+    private ?array $consumeIntervalMapping = null;
 
 
     /**
@@ -113,9 +109,9 @@ class BatchableConsumer extends Consumer
     /**
      * @param array $value
      */
-    public function setTimeoutsMapping(array $value): void
+    public function setConsumeIntervalMapping(array $value): void
     {
-        $this->timeoutsMapping = $value;
+        $this->consumeIntervalMapping = $value;
     }
 
     /**
@@ -154,13 +150,8 @@ class BatchableConsumer extends Consumer
 
         $this->channel = $this->connection->getChannel();
 
-        $arguments = [];
-        if ($this->maxPriority) {
-            $arguments['priority'] = ['I', $this->maxPriority];
-        }
-
-        $this->start();
         $this->startHearbeatCheck();
+        $this->start();
 
         while (true) {
             // Before reserving any jobs, we will make sure this queue is not paused and
@@ -181,15 +172,15 @@ class BatchableConsumer extends Consumer
                     continue;
                 }
 
-                $this->channel->wait(null, false, $this->currentTimeout);
+                $this->channel->wait(null, false, $this->currentConsumeInterval);
             } catch (AMQPRuntimeException $exception) {
                 $this->exceptions->report($exception);
 
                 $this->kill(self::EXIT_ERROR, $options);
             } catch (AMQPTimeoutException) {
                 if ($this->currentPrefetch > 1) {
-                    logger()->info('RabbitMQConsumer.prefetch.timeout', [
-                        'timeout' => $this->currentTimeout,
+                    logger()->info('RabbitMQConsumer.prefetch.currentConsumeInterval.triggered', [
+                        'consumeInterval' => $this->currentConsumeInterval,
                         'workerName' => $this->name,
                         'messagesReady' => count($this->currentMessages)
                     ]);
@@ -304,9 +295,9 @@ class BatchableConsumer extends Consumer
             $first = false;
             $queueIsNotReady = false;
             $this->currentPrefetch = $this->prefetchCount;
-            $this->currentTimeout = (int) $this->options->timeout;
+            $this->currentConsumeInterval = $this->consumeInterval;
 
-            if ($this->preCheck || $this->autoPrefetch || $this->timeoutsMapping) {
+            if ($this->preCheck || $this->autoPrefetch || $this->consumeIntervalMapping) {
                 $client = new Client();
 
                 $host = $this->config['hosts'][0]['host'];
@@ -372,14 +363,14 @@ class BatchableConsumer extends Consumer
                     ]);
                 }
 
-                if ($this->timeoutsMapping) {
-                    foreach ($this->timeoutsMapping as $mapping) {
+                if ($this->consumeIntervalMapping) {
+                    foreach ($this->consumeIntervalMapping as $mapping) {
                         if ($mapping['range'] >= $messages) {
-                            $this->currentTimeout = $mapping['timeout'];
-                            logger()->info('RabbitMQConsumer.queues.currentTimeout.set', [
+                            $this->currentConsumeInterval = (int) $mapping['interval'];
+                            logger()->info('RabbitMQConsumer.queues.currentConsumeInterval.set', [
                                 'queue' => $nextQueue,
                                 'workerName' => $this->name,
-                                'currentTimeout' => $this->currentTimeout,
+                                'currentConsumeInterval' => $this->currentConsumeInterval,
                                 'messagesReady' => $queueData->messages_ready
                             ]);
                             break;
@@ -650,13 +641,11 @@ class BatchableConsumer extends Consumer
             return;
         }
 
-        if (function_exists('\go')) {
-            \go(function () use ($hearbeatInterval) {
-                while (true) {
-                    \Co::sleep($hearbeatInterval);
-                    $this->channel->getConnection()->checkHeartBeat();
-                }
+        if ($this->isAsyncMode()) {
+            \Swoole\Timer::tick($hearbeatInterval * 1000, function () {
+                $this->channel->getConnection()->checkHeartBeat();
             });
+            logger()->info('RabbitMQConsumer.Hearbeat.Timer.started');
         }
     }
 }

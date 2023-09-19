@@ -59,6 +59,7 @@ class BatchableConsumer extends Consumer
     /** @var null|array $consumeIntervalMapping */
     private ?array $consumeIntervalMapping = null;
 
+    private $heartbeatTimerId = null;
 
     /**
      * The name and signature of the console command.
@@ -642,7 +643,19 @@ class BatchableConsumer extends Consumer
         }
 
         if ($this->isAsyncMode()) {
-            \Swoole\Timer::tick($hearbeatInterval * 1000, function () {
+            $this->heartbeatTimerId = \Swoole\Timer::tick($hearbeatInterval * 1000, function () {
+                if (!$this->channel?->getConnection()) {
+                    logger()->warning('RabbitMQConsumer.connection.broken.hearbeatCheck', [
+                        'workerName' => $this->name,
+                    ]);
+                    if ($this->heartbeatTimerId) {
+                        \Swoole\Timer::clear($this->heartbeatTimerId);
+                        $this->heartbeatTimerId = null;
+                    }
+                    $this->shouldQuit = true;
+                    return;
+                }
+
                 $this->channel->getConnection()->checkHeartBeat();
             });
             logger()->info('RabbitMQConsumer.Hearbeat.Timer.started');

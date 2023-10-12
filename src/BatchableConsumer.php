@@ -224,6 +224,12 @@ class BatchableConsumer extends Consumer
         $this->connection->close();
     }
 
+    public function stop($status = 0, $options = null)
+    {
+        $this->stopHearbeatCheck();
+        return parent::stop($status, $options);
+    }
+
     /**
      * Start consuming the rabbitmq queues
      */
@@ -609,7 +615,7 @@ class BatchableConsumer extends Consumer
                 ]);
             } catch (\Throwable $exception) {
                 $failed = true;
-                logger()->warning('RabbitMQConsumer.batch.process.failed', [
+                logger()->error('RabbitMQConsumer.batch.process.failed', [
                     'workerName' => $this->name,
                     'message' => $exception->getMessage(),
                     'trace' => $exception->getTraceAsString(),
@@ -648,17 +654,33 @@ class BatchableConsumer extends Consumer
                     logger()->warning('RabbitMQConsumer.connection.broken.hearbeatCheck', [
                         'workerName' => $this->name,
                     ]);
-                    if ($this->heartbeatTimerId) {
-                        \Swoole\Timer::clear($this->heartbeatTimerId);
-                        $this->heartbeatTimerId = null;
-                    }
                     $this->shouldQuit = true;
+                }
+                if ($this->shouldQuit) {
+                    $this->stopHearbeatCheck();
                     return;
                 }
 
                 $this->channel->getConnection()->checkHeartBeat();
             });
             logger()->info('RabbitMQConsumer.Hearbeat.Timer.started');
+        }
+    }
+
+    private function stopHearbeatCheck()
+    {
+        if (!$this->heartbeatTimerId) {
+            return;
+        }
+
+        try {
+            \Swoole\Timer::clear($this->heartbeatTimerId);
+            $this->heartbeatTimerId = null;
+        } catch (\Throwable $e) {
+            logger()->error('Error on stopping healthcheck timer', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
         }
     }
 }

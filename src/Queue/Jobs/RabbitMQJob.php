@@ -127,7 +127,7 @@ class RabbitMQJob extends Job implements JobContract
         parent::release();
 
         // Always create a new message when this Job is released
-        $this->rabbitmq->laterRaw($delay, $this->message->getBody(), $this->queue, $this->attempts());
+        $this->rabbitmq->laterRaw($delay, $this->message->getBody(), $this->message->getRoutingKey(), $this->attempts());
 
         // Releasing a Job means the message was failed to process.
         // Because this Job message is always recreated and pushed as new message, this Job message is correctly handled.

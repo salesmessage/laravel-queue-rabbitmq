@@ -151,7 +151,7 @@ class BatchableConsumer extends Consumer
 
         $this->channel = $this->connection->getChannel();
 
-        $this->startHearbeatCheck();
+        $this->startHeartbeatCheck();
         $this->start();
 
         while (true) {
@@ -226,7 +226,7 @@ class BatchableConsumer extends Consumer
 
     public function stop($status = 0, $options = null)
     {
-        $this->stopHearbeatCheck();
+        $this->stopHeartbeatCheck();
         return parent::stop($status, $options);
     }
 
@@ -641,43 +641,60 @@ class BatchableConsumer extends Consumer
         $this->processed += count($this->currentMessages);
     }
 
-    private function startHearbeatCheck()
+    private function startHeartbeatCheck(): void
     {
-        $hearbeatInterval = $this->config['options']['heartbeat'] ?? 0;
-        if (!$hearbeatInterval) {
+        if (!$this->isAsyncMode()) {
+            return;
+        }
+        $heartbeatInterval = $this->config['options']['heartbeat'] ?? 0;
+        if (!$heartbeatInterval) {
             return;
         }
 
-        if ($this->isAsyncMode()) {
-            $this->heartbeatTimerId = \Swoole\Timer::tick($hearbeatInterval * 1000, function () {
+        $timerInterval = $heartbeatInterval * 1000;
+        $timerHandler = function () {
+            try {
                 if (!$this->channel?->getConnection()) {
-                    logger()->warning('RabbitMQConsumer.connection.broken.hearbeatCheck', [
-                        'workerName' => $this->name,
-                    ]);
-                    $this->shouldQuit = true;
+                    throw new \Exception('RabbitMQConsumer.connection.broken.heartbeatCheck');
                 }
+
                 if ($this->shouldQuit) {
-                    $this->stopHearbeatCheck();
+                    $this->stopHeartbeatCheck();
                     return;
                 }
 
                 $this->channel->getConnection()->checkHeartBeat();
-            });
-            logger()->info('RabbitMQConsumer.Hearbeat.Timer.started');
-        }
+            } catch (\Throwable $e) {
+                logger()->error('RabbitMQConsumer.heartbeatCheck.error', [
+                    'message' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                    'workerName' => $this->name,
+                ]);
+                $this->shouldQuit = true;
+                $this->stopHeartbeatCheck();
+            }
+        };
+
+        $this->heartbeatTimerId = extension_loaded('swoole')
+            ? \Swoole\Timer::tick($timerInterval, $timerHandler)
+            : \OpenSwoole\Timer::tick($timerInterval, $timerHandler);
+
+        logger()->info('RabbitMQConsumer.heartbeatCheck.started');
     }
 
-    private function stopHearbeatCheck()
+    private function stopHeartbeatCheck(): void
     {
         if (!$this->heartbeatTimerId) {
             return;
         }
 
         try {
-            \Swoole\Timer::clear($this->heartbeatTimerId);
+            extension_loaded('swoole')
+                ? \Swoole\Timer::clear($this->heartbeatTimerId)
+                : \OpenSwoole\Timer::clear($this->heartbeatTimerId);
             $this->heartbeatTimerId = null;
         } catch (\Throwable $e) {
-            logger()->error('Error on stopping healthcheck timer', [
+            logger()->error('RabbitMQConsumer.heartbeatCheck.stopping.error', [
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);

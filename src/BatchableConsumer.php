@@ -623,11 +623,22 @@ class BatchableConsumer extends Consumer
                     'routingKey' => $this->currentMessages[0]->getRoutingKey()
                 ]);
             }
+            /** @var AMQPMessage $message */
             foreach ($this->currentMessages as $message) {
                 if ($failed) {
                     $this->processMessage($message);
                 } else {
-                    $this->connection->getChannel()->basic_ack($message->getDeliveryTag()); // TODO grouped ack test
+                    try {
+                        $message->ack(); // TODO group ack
+                    } catch (\Throwable $exception) {
+                        logger()->error('RabbitMQConsumer.ack.failed', [
+                            'workerName' => $this->name,
+                            'message' => $exception->getMessage(),
+                            'trace' => $exception->getTraceAsString(),
+                            'jobsClass' => $class,
+                            'routingKey' => $message->getRoutingKey()
+                        ]);
+                    }
                 }
             }
             $this->processed += count($this->currentMessages);

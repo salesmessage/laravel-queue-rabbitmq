@@ -96,25 +96,6 @@ class BatchableConsumeCommand extends WorkCommand
             );
         }
 
-        if ($consumer->isAsyncMode()) {
-            logger()->info('RabbitMQConsumer.AsyncMode.On');
-            $workerHandler = function () use ($connection, $queue) {
-                $this->runWorker(
-                    $connection, $queue
-                );
-            };
-
-            if (extension_loaded('swoole')) {
-                return \Co\run($workerHandler);
-            }
-            if (extension_loaded('openswoole')) {
-                \OpenSwoole\Runtime::enableCoroutine(true, \OpenSwoole\Runtime::HOOK_ALL);
-                return \co::run($workerHandler);
-            }
-
-            throw new \Exception('Async mode is not supported');
-        }
-
         return $this->runWorker(
             $connection, $queue
         );

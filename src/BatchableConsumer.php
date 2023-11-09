@@ -3,6 +3,7 @@
 namespace VladimirYuldashev\LaravelQueueRabbitMQ;
 
 use GuzzleHttp\Exception\RequestException;
+use PhpAmqpLib\Channel\AbstractChannel;
 use VladimirYuldashev\LaravelQueueRabbitMQ\Interfaces\RabbitMQBatchable;
 use GuzzleHttp\Client;
 use Illuminate\Contracts\Queue\Queue;
@@ -38,7 +39,7 @@ class BatchableConsumer extends Consumer
     private int $processed = 0;
 
     /** @var Queue */
-    private Queue $connection;
+    private Queue $queueConnection;
 
     /** @var string */
     private string $connectionName;
@@ -58,8 +59,6 @@ class BatchableConsumer extends Consumer
 
     /** @var null|array $consumeIntervalMapping */
     private ?array $consumeIntervalMapping = null;
-
-    private $heartbeatTimerId = null;
 
     /**
      * The name and signature of the console command.
@@ -147,87 +146,114 @@ class BatchableConsumer extends Consumer
         [$startTime, $jobsProcessed] = [hrtime(true) / 1e9, 0];
 
         /** @var Queue $connection */
-        $this->connection = $this->manager->connection($this->connectionName);
+        $this->queueConnection = $this->manager->connection($this->connectionName);
 
-        $this->channel = $this->connection->getChannel();
-
-        $this->startHeartbeatCheck();
-        $this->start();
-
-        while (true) {
-            // Before reserving any jobs, we will make sure this queue is not paused and
-            // if it is we will just pause this worker for a given amount of time and
-            // make sure we do not need to kill this worker process off completely.
-            if (!$this->daemonShouldRun($options, $this->connectionName, $queue)) {
-                $this->pauseWorker($options, $lastRestart);
-                continue;
-            }
-
-            // If the daemon should run (not in maintenance mode, etc.), then we can wait for a job.
-            try {
-                if (!$this->channel->getConnection()) {
-                    logger()->info('RabbitMQConsumer.connection.broken.kill', [
-                        'workerName' => $this->name,
-                    ]);
-                    $this->kill(self::EXIT_ERROR, $options);
+        $heartbeatHandler = function () {
+            $this->startHeartbeatCheck();
+        };
+        $mainHandler = function () use ($options, $queue, $lastRestart, $startTime, $jobsProcessed) {
+            $this->start();
+            while (true) {
+                // Before reserving any jobs, we will make sure this queue is not paused and
+                // if it is we will just pause this worker for a given amount of time and
+                // make sure we do not need to kill this worker process off completely.
+                if (!$this->daemonShouldRun($options, $this->connectionName, $queue)) {
+                    $this->pauseWorker($options, $lastRestart);
                     continue;
                 }
 
-                $this->channel->wait(null, false, $this->currentConsumeInterval);
-            } catch (AMQPRuntimeException $exception) {
-                $this->exceptions->report($exception);
+                $channel = $this->popChannel();
+                // If the daemon should run (not in maintenance mode, etc.), then we can wait for a job.
+                try {
+                    if (!$channel?->getConnection()) {
+                        logger()->info('RabbitMQConsumer.connection.broken.kill', [
+                            'workerName' => $this->name,
+                        ]);
+                        $this->kill(self::EXIT_ERROR, $options);
+                    }
 
-                $this->kill(self::EXIT_ERROR, $options);
-            } catch (AMQPTimeoutException) {
-                if ($this->currentPrefetch > 1) {
-                    logger()->info('RabbitMQConsumer.prefetch.currentConsumeInterval.triggered', [
-                        'consumeInterval' => $this->currentConsumeInterval,
-                        'workerName' => $this->name,
-                        'messagesReady' => count($this->currentMessages)
-                    ]);
-                    if ($this->roundRobin) {
-                        $this->stopConsume();
-                        $this->processBatch();
-                        $this->switchToNextQueue();
+                    $channel->wait(null, false, $this->currentConsumeInterval);
+                    $this->pushChannel($channel);
+                } catch (AMQPRuntimeException $exception) {
+                    $this->exceptions->report($exception);
+
+                    $this->kill(self::EXIT_ERROR, $options);
+                } catch (AMQPTimeoutException) {
+                    if ($channel) {
+                        $this->pushChannel($channel);
+                    }
+                    if ($this->currentPrefetch > 1) {
+                        logger()->info('RabbitMQConsumer.prefetch.currentConsumeInterval.triggered', [
+                            'consumeInterval' => $this->currentConsumeInterval,
+                            'workerName' => $this->name,
+                            'messagesReady' => count($this->currentMessages)
+                        ]);
+                        if ($this->roundRobin) {
+                            $this->stopConsume();
+                            $this->processBatch();
+                            $this->switchToNextQueue();
+                        } else {
+                            $this->processBatch();
+                        }
                     } else {
-                        $this->processBatch();
+                        if ($this->roundRobin) {
+                            $this->stopConsume();
+                            $this->switchToNextQueue();
+                        }
                     }
-                } else {
-                    if ($this->roundRobin) {
-                        $this->stopConsume();
-                        $this->switchToNextQueue();
-                    }
+                } catch (\Exception | \Throwable $exception) {
+                    $this->exceptions->report($exception);
+
+                    $this->stopWorkerIfLostConnection($exception);
                 }
-            } catch (\Exception | \Throwable $exception) {
-                $this->exceptions->report($exception);
 
-                $this->stopWorkerIfLostConnection($exception);
+                // Finally, we will check to see if we have exceeded our memory limits or if
+                // the queue should restart based on other indications. If so, we'll stop
+                // this worker and let whatever is "monitoring" it restart the process.
+                $status = $this->stopIfNecessary(
+                    $options,
+                    $lastRestart,
+                    $startTime,
+                    $jobsProcessed,
+                    $this->currentJob
+                );
+
+                if (!is_null($status)) {
+                    return $this->stop($status, $options);
+                }
             }
+        };
 
-            // Finally, we will check to see if we have exceeded our memory limits or if
-            // the queue should restart based on other indications. If so, we'll stop
-            // this worker and let whatever is "monitoring" it restart the process.
-            $status = $this->stopIfNecessary(
-                $options,
-                $lastRestart,
-                $startTime,
-                $jobsProcessed,
-                $this->currentJob
-            );
+        $channel = $this->queueConnection->getChannel();
 
-            if (!is_null($status)) {
-                return $this->stop($status, $options);
+        if ($this->isAsyncMode()) {
+            logger()->info('RabbitMQConsumer.AsyncMode.On');
+            $resultStatus = null;
+            $coroutineContextHandler = function () use ($channel, $heartbeatHandler, $mainHandler, &$resultStatus) {
+                logger()->info('RabbitMQConsumer.AsyncMode.Coroutines.Running');
+                $this->initializeChannelPool($channel);
+                $heartbeatHandler();
+                \go(function () use ($mainHandler, &$resultStatus) {
+                    $resultStatus = $mainHandler();
+                });
+            };
+
+            if (extension_loaded('swoole')) {
+                logger()->info('RabbitMQConsumer.AsyncMode.Swoole');
+                \Co\run($coroutineContextHandler);
+            } elseif (extension_loaded('openswoole')) {
+                logger()->info('RabbitMQConsumer.AsyncMode.OpenSwoole');
+                \OpenSwoole\Runtime::enableCoroutine(true, \OpenSwoole\Runtime::HOOK_ALL);
+                \co::run($coroutineContextHandler);
+            } else {
+                throw new \Exception('Async mode is not supported. Check if Swoole extension is installed');
             }
+            return $resultStatus;
         }
 
-        $this->channel->close();
-        $this->connection->close();
-    }
-
-    public function stop($status = 0, $options = null)
-    {
-        $this->stopHeartbeatCheck();
-        return parent::stop($status, $options);
+        $this->initializeChannelPool($channel);
+        $heartbeatHandler();
+        return $mainHandler();
     }
 
     /**
@@ -235,11 +261,14 @@ class BatchableConsumer extends Consumer
      */
     private function start(): void
     {
-        $this->channel->basic_qos(
+        /** @var AbstractChannel $channel */
+        $channel = $this->popChannel();
+        $channel->basic_qos(
             $this->prefetchSize,
             $this->prefetchCount,
             true
         );
+        $this->pushChannel($channel);
         $this->discoverQueues();
         if ($this->roundRobin) {
             $this->switchToNextQueue(true);
@@ -446,7 +475,9 @@ class BatchableConsumer extends Consumer
             'newQueue' => $queue
         ]);
 
-        $this->channel->basic_consume(
+        /** @var AbstractChannel $channel */
+        $channel = $this->popChannel();
+        $channel->basic_consume(
             $queue,
             $this->consumerTag,
             false,
@@ -455,6 +486,7 @@ class BatchableConsumer extends Consumer
             false,
             $callback
         );
+        $this->pushChannel($channel);
     }
 
     /**
@@ -462,7 +494,10 @@ class BatchableConsumer extends Consumer
      */
     private function stopConsume()
     {
-        $this->channel->basic_cancel($this->consumerTag, true);
+        /** @var AbstractChannel $channel */
+        $channel = $this->popChannel();
+        $channel->basic_cancel($this->consumerTag, true);
+        $this->pushChannel($channel);
     }
 
     /**
@@ -538,11 +573,11 @@ class BatchableConsumer extends Consumer
      */
     private function getJobByMessage(AMQPMessage $message): mixed
     {
-        $jobClass = $this->connection->getJobClass();
+        $jobClass = $this->queueConnection->getJobClass();
         /** @var RabbitMQJob $job */
         return new $jobClass(
             $this->container,
-            $this->connection,
+            $this->queueConnection,
             $message,
             $this->connectionName,
             $this->queue
@@ -662,19 +697,25 @@ class BatchableConsumer extends Consumer
             return;
         }
 
-        $timerInterval = $heartbeatInterval * 1000;
         $timerHandler = function () {
+            /** @var AbstractChannel $channel */
+            $channel = $this->popChannel( false, 3);
+            if (!$channel) {
+                return;
+            }
+
             try {
-                if (!$this->channel?->getConnection()) {
+                if (!$channel?->getConnection()) {
                     throw new \Exception('RabbitMQConsumer.connection.broken.heartbeatCheck');
                 }
 
                 if ($this->shouldQuit) {
-                    $this->stopHeartbeatCheck();
                     return;
                 }
 
-                $this->channel->getConnection()->checkHeartBeat();
+                if (!$channel->getConnection()->isWriting()) {
+                    $channel->getConnection()->checkHeartBeat();
+                }
             } catch (\Throwable $e) {
                 logger()->error('RabbitMQConsumer.heartbeatCheck.error', [
                     'message' => $e->getMessage(),
@@ -682,33 +723,20 @@ class BatchableConsumer extends Consumer
                     'workerName' => $this->name,
                 ]);
                 $this->shouldQuit = true;
-                $this->stopHeartbeatCheck();
+            } finally {
+                $this->pushChannel($channel);
             }
         };
 
-        $this->heartbeatTimerId = extension_loaded('swoole')
-            ? \Swoole\Timer::tick($timerInterval, $timerHandler)
-            : \OpenSwoole\Timer::tick($timerInterval, $timerHandler);
-
-        logger()->info('RabbitMQConsumer.heartbeatCheck.started');
-    }
-
-    private function stopHeartbeatCheck(): void
-    {
-        if (!$this->heartbeatTimerId) {
-            return;
-        }
-
-        try {
-            extension_loaded('swoole')
-                ? \Swoole\Timer::clear($this->heartbeatTimerId)
-                : \OpenSwoole\Timer::clear($this->heartbeatTimerId);
-            $this->heartbeatTimerId = null;
-        } catch (\Throwable $e) {
-            logger()->error('RabbitMQConsumer.heartbeatCheck.stopping.error', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-        }
+        \go(function () use ($timerHandler, $heartbeatInterval) {
+            logger()->info('RabbitMQConsumer.heartbeatCheck.started');
+            while (true) {
+                sleep($heartbeatInterval);
+                $timerHandler();
+                if ($this->shouldQuit) {
+                    return;
+                }
+            }
+        });
     }
 }

@@ -9,10 +9,13 @@ use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Queue\Factory as QueueManager;
 use Illuminate\Queue\Worker;
 use Illuminate\Queue\WorkerOptions;
+use PhpAmqpLib\Channel\AbstractChannel;
 use PhpAmqpLib\Channel\AMQPChannel;
 use PhpAmqpLib\Exception\AMQPRuntimeException;
 use PhpAmqpLib\Message\AMQPMessage;
 use Throwable;
+use VladimirYuldashev\LaravelQueueRabbitMQ\Contracts\ChannelPool;
+use VladimirYuldashev\LaravelQueueRabbitMQ\Queue\Connection\ChannelPoolFactory;
 use VladimirYuldashev\LaravelQueueRabbitMQ\Queue\RabbitMQQueue;
 
 class Consumer extends Worker
@@ -32,9 +35,6 @@ class Consumer extends Worker
     /** @var int */
     protected $prefetchCount;
 
-    /** @var AMQPChannel */
-    protected $channel;
-
     /** @var object|null */
     protected $currentJob;
 
@@ -44,6 +44,27 @@ class Consumer extends Worker
     protected bool $asyncMode = false;
 
     protected int $consumeInterval = 60;
+
+    /**
+     * Do not access this property directly. Use @see self::popChannel() to get access
+     * and to return channel again to pool use @see self::pushChannel($data)
+     * @var AMQPChannel
+     */
+    private $channel;
+
+    /**
+     * Stack with 1 variable (channel). Provides access to the "channel" only from the 1 code place at the same time.
+     * Used for async handlers (coroutines), when coroutines need to use "channel" they have to wait for while another coroutine has been finished.
+     * @var ChannelPool|null
+     */
+    private ChannelPool|null $channelPool = null;
+
+    /**
+     * Indicates if channel has been taken from the pool to work in the main handler (process)
+     * Used as indicator if we need a fallback channel (channel from class property)
+     * @var bool
+     */
+    private bool $isMainHandlerUseChannelNow = false;
 
     /**
      * Create a new queue worker.
@@ -142,9 +163,10 @@ class Consumer extends Worker
         /** @var RabbitMQQueue $connection */
         $connection = $this->manager->connection($connectionName);
 
-        $this->channel = $connection->getChannel();
+        $this->initializeChannelPool($connection->getChannel());
+        $channel = $this->popChannel();
 
-        $this->channel->basic_qos(
+        $channel->basic_qos(
             $this->prefetchSize,
             $this->prefetchCount,
             false
@@ -156,7 +178,7 @@ class Consumer extends Worker
             $arguments['priority'] = ['I', $this->maxPriority];
         }
 
-        $this->channel->basic_consume(
+        $channel->basic_consume(
             $queue,
             $this->consumerTag,
             false,
@@ -194,7 +216,7 @@ class Consumer extends Worker
             $arguments
         );
 
-        while ($this->channel->is_consuming()) {
+        while ($channel->is_consuming()) {
             // Before reserving any jobs, we will make sure this queue is not paused and
             // if it is we will just pause this worker for a given amount of time and
             // make sure we do not need to kill this worker process off completely.
@@ -206,7 +228,7 @@ class Consumer extends Worker
 
             // If the daemon should run (not in maintenance mode, etc.), then we can wait for a job.
             try {
-                $this->channel->wait(null, true, (int) $options->timeout);
+                $channel->wait(null, true, (int) $options->timeout);
             } catch (AMQPRuntimeException $exception) {
                 $this->exceptions->report($exception);
 
@@ -234,6 +256,7 @@ class Consumer extends Worker
             );
 
             if (! is_null($status)) {
+                $this->pushChannel($channel);
                 return $this->stop($status, $options);
             }
 
@@ -261,10 +284,48 @@ class Consumer extends Worker
      */
     public function stop($status = 0, $options = null)
     {
+        $channel = $this->popChannel();
         // Tell the server you are going to stop consuming.
         // It will finish up the last message and not send you any more.
-        $this->channel->basic_cancel($this->consumerTag, false, true);
+        $channel->basic_cancel($this->consumerTag, false, true);
+        $this->pushChannel($channel);
 
         return parent::stop($status, $options);
+    }
+
+    protected function popChannel(bool $isMainHandlerNeedIt = true, float $timeout = null): ?AbstractChannel
+    {
+        /**
+         * Explanation of combination "isEmpty" + "isMainHandlerUseChannelNow":
+         * if pool is empty and channel is used in the main process and other part of code needs channel
+         * for communication, we just use it from class "property".
+         * this case is possible when in "while" loop we "pop" channel from the pool. pool is empty,
+         * but in the "wait" (channel's method) here is callback that needs to "pop" channel again.
+         * to not stuck (waiting for channel from the pool) we just provide channel from class property,
+         * since implementation with channels pool has effect only for different coroutines to make 1 coroutine
+         * waiting for another coroutine has been finished (finished using of channel)
+         */
+        $channel = $isMainHandlerNeedIt && $this->channelPool->isEmpty() && $this->isMainHandlerUseChannelNow
+            ? $this->channel
+            : $this->channelPool->pop($timeout);
+        $this->isMainHandlerUseChannelNow = $isMainHandlerNeedIt;
+        return $channel;
+    }
+
+    protected function pushChannel($data): void
+    {
+        if ($this->channelPool->isEmpty()) {
+            $this->channelPool->push($data);
+        }
+        $this->isMainHandlerUseChannelNow = false;
+    }
+
+    protected function initializeChannelPool(AbstractChannel $channel): void
+    {
+        if (!$this->channelPool) {
+            $this->channelPool = ChannelPoolFactory::make($this->isAsyncMode());
+            $this->channelPool->push($channel);
+            $this->channel = $channel;
+        }
     }
 }

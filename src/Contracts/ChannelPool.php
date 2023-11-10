@@ -12,7 +12,7 @@ interface ChannelPool
      * @param float|null $timeout
      * @return AbstractChannel|null|bool
      */
-    public function pop(float $timeout = null);
+    public function pop(?float $timeout = null);
 
     public function isEmpty(): bool;
 }

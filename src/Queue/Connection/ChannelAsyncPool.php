@@ -25,7 +25,7 @@ final class ChannelAsyncPool implements ChannelPool
         $this->pool->push($data);
     }
 
-    public function pop(float $timeout = null): ?AbstractChannel
+    public function pop(?float $timeout = null)
     {
         return $this->pool->pop($timeout ?: -1);
     }

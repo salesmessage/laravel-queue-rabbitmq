@@ -293,7 +293,12 @@ class Consumer extends Worker
         return parent::stop($status, $options);
     }
 
-    protected function popChannel(bool $isMainHandlerNeedIt = true, float $timeout = null): ?AbstractChannel
+    /**
+     * @param bool $isMainHandlerNeedIt
+     * @param float|null $timeout
+     * @return AbstractChannel|null|bool
+     */
+    protected function popChannel(bool $isMainHandlerNeedIt = true, ?float $timeout = null)
     {
         /**
          * Explanation of combination "isEmpty" + "isMainHandlerUseChannelNow":

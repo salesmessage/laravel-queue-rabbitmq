@@ -8,7 +8,11 @@ interface ChannelPool
 {
     public function push(AbstractChannel $data): void;
 
-    public function pop(float $timeout = null): ?AbstractChannel;
+    /**
+     * @param float|null $timeout
+     * @return AbstractChannel|null|bool
+     */
+    public function pop(?float $timeout = null);
 
     public function isEmpty(): bool;
 }

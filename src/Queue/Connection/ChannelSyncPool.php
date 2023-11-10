@@ -19,7 +19,7 @@ final class ChannelSyncPool implements ChannelPool
         }
     }
 
-    public function pop(float $timeout = null): ?AbstractChannel
+    public function pop(float $timeout = null)
     {
         return $this->channel;
     }

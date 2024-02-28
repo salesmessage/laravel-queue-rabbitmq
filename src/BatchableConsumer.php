@@ -522,17 +522,16 @@ class BatchableConsumer extends Consumer
      */
     private function stopConsume()
     {
-        /** @var AbstractChannel $channel */
-        $channel = $this->popChannel();
-        $start = microtime(true);
-        $channel->basic_cancel($this->consumerTag, false, true);
-        $this->pushChannel($channel);
         logger()->info('RabbitMQConsumer.StopConsume', [
             'workerName' => $this->name,
             'currentMessagesCount' => count($this->currentMessages),
             'currentPrefetch' => $this->currentPrefetch,
-            'requestTime' => round(microtime(true) - $start, 2),
         ]);
+
+        /** @var AbstractChannel $channel */
+        $channel = $this->popChannel();
+        $channel->basic_cancel($this->consumerTag, true);
+        $this->pushChannel($channel);
     }
 
     /**

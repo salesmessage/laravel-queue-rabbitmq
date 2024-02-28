@@ -60,6 +60,9 @@ class BatchableConsumer extends Consumer
     /** @var null|array $consumeIntervalMapping */
     private ?array $consumeIntervalMapping = null;
 
+    /** @var AMQPMessage[] $pastQueuesMessages */
+    private array $pastQueuesMessages = [];
+
     /**
      * The name and signature of the console command.
      *
@@ -491,6 +494,10 @@ class BatchableConsumer extends Consumer
     private function startConsuming(string $queue)
     {
         $callback = function (AMQPMessage $message) use ($queue, &$callback): void {
+            if (!$this->isValidMessage($message, $queue)) {
+                return;
+            }
+
             if ($this->currentPrefetch > 1) {
                 $this->batchHandler($message);
             } else {
@@ -598,6 +605,8 @@ class BatchableConsumer extends Consumer
         $this->processedJob = 0;
         $this->currentMessages = [];
 
+        $this->requeuePastQueuesMessages();
+
         logger()->info('RabbitMQConsumer.BatchProcessed.ClearData', [
             'workerName' => $this->name,
         ]);
@@ -648,6 +657,65 @@ class BatchableConsumer extends Consumer
         if ($this->supportsAsyncSignals()) {
             $this->resetTimeoutHandler();
         }
+
+        $this->requeuePastQueuesMessages();
+    }
+
+    private function isValidMessage(AMQPMessage $message, string $currentQueue): bool
+    {
+        // case when we receive messages from previously consumed queue
+        // it might be possible since for cancelling consuming we don't wait for response
+        if ($message->getRoutingKey() !== $currentQueue) {
+            logger()->warning('RabbitMQConsumer.messageFromPastQueue', [
+                'workerName' => $this->name,
+                'currentQueue' => $currentQueue,
+                'receivedQueue' => $message->getRoutingKey(),
+            ]);
+            // we don't send message back immediately to not process it again (in the theory)
+            // instead we collect it and send when we finished messages processing
+            $this->pastQueuesMessages[] = $message;
+            // if for some reason we collect a lot of messages from the different queues
+            if ($this->pastQueuesMessages >= $this->prefetchCount) {
+                logger()->warning('RabbitMQConsumer.messageFromPastQueue.moreThanPrefetchCount', [
+                    'workerName' => $this->name,
+                    'currentQueue' => $currentQueue,
+                    'prefetchCount' => $this->prefetchCount,
+                    'pastQueuesMessagesCount' => count($this->pastQueuesMessages),
+                ]);
+            }
+            return false;
+        }
+
+        return true;
+    }
+
+    private function requeuePastQueuesMessages(): void
+    {
+        if (!$this->pastQueuesMessages) {
+            return;
+        }
+
+        logger()->warning('RabbitMQConsumer.requeuePastQueuesMessages', [
+            'workerName' => $this->name,
+            'pastQueuesMessagesCount' => count($this->pastQueuesMessages),
+            'pastQueues' => array_unique(
+                array_map(fn (AMQPMessage $pastQueueMessage) => $pastQueueMessage->getRoutingKey(), $this->pastQueuesMessages)
+            ),
+        ]);
+
+        foreach ($this->pastQueuesMessages as $message) {
+            try {
+                $message->nack(true);
+            } catch (\Throwable $e) {
+                logger()->error('RabbitMQConsumer.requeuePastQueuesMessages.failed', [
+                    'workerName' => $this->name,
+                    'messageQueue' => $message->getRoutingKey(),
+                    'errorMessage' => $e->getMessage(),
+                    'errorTrace' => $e->getTraceAsString(),
+                ]);
+            }
+        }
+        $this->pastQueuesMessages = [];
     }
 
     /**

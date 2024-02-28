@@ -675,7 +675,7 @@ class BatchableConsumer extends Consumer
             // instead we collect it and send when we finished messages processing
             $this->pastQueuesMessages[] = $message;
             // if for some reason we collect a lot of messages from the different queues
-            if ($this->pastQueuesMessages >= $this->prefetchCount) {
+            if (count($this->pastQueuesMessages) >= $this->prefetchCount) {
                 logger()->warning('RabbitMQConsumer.messageFromPastQueue.moreThanPrefetchCount', [
                     'workerName' => $this->name,
                     'currentQueue' => $currentQueue,

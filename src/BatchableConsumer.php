@@ -63,6 +63,8 @@ class BatchableConsumer extends Consumer
     /** @var AMQPMessage[] $pastQueuesMessages */
     private array $pastQueuesMessages = [];
 
+    private ?int $workerExitCode = null;
+
     /**
      * The name and signature of the console command.
      *
@@ -217,7 +219,7 @@ class BatchableConsumer extends Consumer
                 // Finally, we will check to see if we have exceeded our memory limits or if
                 // the queue should restart based on other indications. If so, we'll stop
                 // this worker and let whatever is "monitoring" it restart the process.
-                $status = $this->stopIfNecessary(
+                $this->workerExitCode = $this->stopIfNecessary(
                     $options,
                     $lastRestart,
                     $startTime,
@@ -225,8 +227,8 @@ class BatchableConsumer extends Consumer
                     $this->currentJob
                 );
 
-                if (!is_null($status)) {
-                    return $this->stop($status, $options);
+                if (!is_null($this->workerExitCode)) {
+                    return $this->stop($this->workerExitCode, $options);
                 }
             }
         };
@@ -816,7 +818,7 @@ class BatchableConsumer extends Consumer
         }
 
         $heartbeatHandler = function () {
-            if ($this->shouldQuit) {
+            if ($this->shouldQuit || !is_null($this->workerExitCode)) {
                 return;
             }
 
@@ -849,7 +851,7 @@ class BatchableConsumer extends Consumer
             while (true) {
                 sleep($heartbeatInterval);
                 $heartbeatHandler();
-                if ($this->shouldQuit) {
+                if ($this->shouldQuit || !is_null($this->workerExitCode)) {
                     return;
                 }
             }

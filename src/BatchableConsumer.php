@@ -240,6 +240,7 @@ class BatchableConsumer extends Consumer
             $resultStatus = 0;
             $coroutineContextHandler = function () use ($heartbeatHandler, $mainHandler, &$resultStatus) {
                 logger()->info('RabbitMQConsumer.AsyncMode.Coroutines.Running');
+                // we can't move it outside since Mutex should be created within coroutine context
                 $this->connectionMutex = new Mutex();
                 $heartbeatHandler();
                 \go(function () use ($mainHandler, &$resultStatus) {
@@ -258,6 +259,9 @@ class BatchableConsumer extends Consumer
                 throw new \Exception('Async mode is not supported. Check if Swoole extension is installed');
             }
             return $resultStatus;
+        } else {
+            logger()->info('RabbitMQConsumer.AsyncMode.Off');
+            $this->connectionMutex = new Mutex();
         }
 
         $heartbeatHandler();

@@ -45,12 +45,6 @@ class LaravelQueueRabbitMQServiceProvider extends ServiceProvider
                 );
             });
 
-            $this->app->singleton(GarbageCollector::class, static function ($app) {
-                return new GarbageCollector(
-                    $app['config']['queue']['connections']['rabbitmq']
-                );
-            });
-
             $this->app->singleton(Consumer::class, function () {
                 $isDownForMaintenance = function () {
                     return $this->app->isDownForMaintenance();
@@ -78,6 +72,12 @@ class LaravelQueueRabbitMQServiceProvider extends ServiceProvider
                 Console\BatchableConsumeCommand::class,
             ]);
         }
+
+        $this->app->singleton(GarbageCollector::class, static function ($app) {
+            return new GarbageCollector(
+                $app['config']['queue']['connections']['rabbitmq']
+            );
+        });
 
         $this->commands([
             Console\ExchangeDeclareCommand::class,

@@ -145,7 +145,7 @@ class Consumer extends Worker
         $connection = $this->manager->connection($connectionName);
 
         $this->channel = $connection->getChannel();
-        $this->connectionMutex = new Mutex();
+        $this->connectionMutex = new Mutex(false);
 
         $this->connectionMutex->lock(static::MAIN_HANDLER_LOCK);
         $this->channel->basic_qos(

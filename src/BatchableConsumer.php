@@ -241,7 +241,7 @@ class BatchableConsumer extends Consumer
             $coroutineContextHandler = function () use ($heartbeatHandler, $mainHandler, &$resultStatus) {
                 logger()->info('RabbitMQConsumer.AsyncMode.Coroutines.Running');
                 // we can't move it outside since Mutex should be created within coroutine context
-                $this->connectionMutex = new Mutex();
+                $this->connectionMutex = new Mutex(true);
                 $heartbeatHandler();
                 \go(function () use ($mainHandler, &$resultStatus) {
                     $resultStatus = $mainHandler();
@@ -261,7 +261,7 @@ class BatchableConsumer extends Consumer
             return $resultStatus;
         } else {
             logger()->info('RabbitMQConsumer.AsyncMode.Off');
-            $this->connectionMutex = new Mutex();
+            $this->connectionMutex = new Mutex(false);
         }
 
         $heartbeatHandler();

@@ -11,8 +11,12 @@ final class Mutex
     private ?string $currentLockInitiator = null;
     private $availableLocksPool = null;
 
-    public function __construct()
+    public function __construct(bool $asyncMode = true)
     {
+        if (!$asyncMode) {
+            return;
+        }
+
         if (extension_loaded('swoole')) {
             $this->availableLocksPool = new \Swoole\Coroutine\Channel();
         } elseif (extension_loaded('openswoole')) {

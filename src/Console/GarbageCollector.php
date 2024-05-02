@@ -60,16 +60,34 @@ class GarbageCollector extends Command
             ]
         );
         $queues = json_decode($res->getBody());
+
+        $dlqTargets = [];
+        foreach ($queues as $queue) {
+            $arguments = $queue->arguments ?? null;
+            if (!empty($arguments)) {
+                $dlx = $arguments->{'x-dead-letter-exchange'} ?? null;
+                $dlk = $arguments->{'x-dead-letter-routing-key'} ?? null;
+
+                if (empty($dlk) || 0 === $queue->messages) {
+                    continue;
+                }
+
+                $dlqTargets[$dlk] = !empty($dlx)
+                    ? $dlx
+                    : $dlk;
+            }
+        }
+
+
         $queuesToRemove = collect($queues)
-            ->filter(function ($queue) {
+            ->filter(function ($queue) use ($dlqTargets){
                 $messages = $queue->messages ?? 0;
-                return $queue->name !== 'default' && !str_contains(
-                        $queue->name,
-                        'failed'
-                    ) && !str_contains(
-                        $queue->name,
-                        'dlq'
-                    ) && $messages === 0 && ($queue->messages_details?->rate ?? 0) === 0.0
+                return $queue->name !== 'default'
+                    && !str_contains($queue->name, 'failed')
+                    && !str_contains($queue->name, 'dlq')
+                    && !isset($dlqTargets[$queue->name])
+                    && $messages === 0
+                    && ($queue->messages_details?->rate ?? 0.0) === 0.0
                     && $queue->messages_ready_details->rate === 0.0
                     && $queue->messages_unacknowledged_details->rate === 0.0;
             })

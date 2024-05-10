@@ -49,17 +49,32 @@ class GarbageCollector extends Command
         $password = $this->config['hosts'][0]['password'];
         $client = new Client();
         $url = $host . ':' . $port;
-        $res = $client->get(
-            "{$scheme}{$url}/api/queues",
-            [
-                'headers' => [
-                    'Authorization' => 'Basic ' . base64_encode(
-                            $username . ':' . $password
-                        )
-                ]
-            ]
-        );
-        $queues = json_decode($res->getBody());
+        $tries = 0;
+        while ($tries < 5) {
+            $tries++;
+            try {
+                $res = $client->get(
+                    "{$scheme}{$url}/api/queues",
+                    [
+                        'headers' => [
+                            'Authorization' => 'Basic ' . base64_encode(
+                                    $username . ':' . $password
+                                )
+                        ]
+                    ]
+                );
+                $queues = json_decode($res->getBody());
+            } catch (\Throwable $exception) {
+                logger()->warning('RabbitMQ Garbage Collector failed to get queues', [
+                    'message' => $exception->getMessage()
+                ]);
+                $queues = [];
+            }
+        }
+
+        if (!isset($queues)) {
+            $queues = [];
+        }
 
         $dlqTargets = [];
         foreach ($queues as $queue) {
@@ -80,7 +95,7 @@ class GarbageCollector extends Command
 
 
         $queuesToRemove = collect($queues)
-            ->filter(function ($queue) use ($dlqTargets){
+            ->filter(function ($queue) use ($dlqTargets) {
                 $messages = $queue->messages ?? 0;
                 return $queue->name !== 'default'
                     && !str_contains($queue->name, 'failed')
@@ -94,6 +109,11 @@ class GarbageCollector extends Command
             ->pluck('name')
             ->values()
             ->toArray();
+
+        logger()->info('RabbitMQ Garbage Collector loaded queues filtered', [
+            'queues_count' => count($queues ?? 0),
+            'queues_filtered' => count($queuesToRemove ?? 0)
+        ]);
 
         foreach ($queuesToRemove as $queue) {
             try {

@@ -380,7 +380,7 @@ class BatchableConsumer extends Consumer
                         ]
                     );
                 } catch (RequestException $e) {
-                    if ((int) $e->getCode() === 404) {
+                    if ((int)$e->getCode() === 404) {
                         logger()->warning('RabbitMQConsumer.discoverNextQueue.queueNotFound', [
                             'queue' => $nextQueue,
                         ]);
@@ -426,7 +426,7 @@ class BatchableConsumer extends Consumer
                 if ($this->consumeIntervalMapping) {
                     foreach ($this->consumeIntervalMapping as $mapping) {
                         if ($mapping['range'] >= $messages) {
-                            $this->currentConsumeInterval = (int) $mapping['interval'];
+                            $this->currentConsumeInterval = (int)$mapping['interval'];
                             logger()->info('RabbitMQConsumer.queues.currentConsumeInterval.set', [
                                 'queue' => $nextQueue,
                                 'workerName' => $this->name,
@@ -698,7 +698,10 @@ class BatchableConsumer extends Consumer
             'workerName' => $this->name,
             'pastQueuesMessagesCount' => count($this->pastQueuesMessages),
             'pastQueues' => array_unique(
-                array_map(fn (AMQPMessage $pastQueueMessage) => $pastQueueMessage->getRoutingKey(), $this->pastQueuesMessages)
+                array_map(
+                    fn(AMQPMessage $pastQueueMessage) => $pastQueueMessage->getRoutingKey(),
+                    $this->pastQueuesMessages
+                )
             ),
         ]);
 
@@ -748,7 +751,7 @@ class BatchableConsumer extends Consumer
                 $batchData[] = $job->getPayloadData();
             }
 
-            $routingKeys = array_map(fn ($currentMessage) => $currentMessage->getRoutingKey(), $this->currentMessages);
+            $routingKeys = array_map(fn($currentMessage) => $currentMessage->getRoutingKey(), $this->currentMessages);
             $routingKeys = array_unique($routingKeys);
             if (count($routingKeys) > 1) {
                 logger()->warning('RabbitMQConsumer.IncorrectGroupedRoutingKeys', [
@@ -781,23 +784,25 @@ class BatchableConsumer extends Consumer
                 ]);
             }
             $this->connectionMutex->lock(static::MAIN_HANDLER_LOCK);
-            /** @var AMQPMessage $message */
-            foreach ($this->currentMessages as $message) {
-                if ($failed) {
+            if ($failed) {
+                /** @var AMQPMessage $message */
+                foreach ($this->currentMessages as $message) {
                     $this->processMessage($message);
-                } else {
-                    try {
-                        $message->ack(); // TODO group ack
-                    } catch (\Throwable $exception) {
-                        logger()->error('RabbitMQConsumer.ack.failed', [
-                            'workerName' => $this->name,
-                            'message' => $exception->getMessage(),
-                            'trace' => $exception->getTraceAsString(),
-                            'jobsClass' => $class,
-                            'routingKey' => $message->getRoutingKey()
-                        ]);
-                    }
                 }
+            }
+            try {
+                $lastKey = array_key_last($this->currentMessages ?? []);
+                if ($lastKey) {
+                    $this->currentMessages[$lastKey]->ack(true);
+                }
+            } catch (\Throwable $exception) {
+                logger()->error('RabbitMQConsumer.ack.failed', [
+                    'workerName' => $this->name,
+                    'message' => $exception->getMessage(),
+                    'trace' => $exception->getTraceAsString(),
+                    'jobsClass' => $class,
+                    'routingKey' => $message->getRoutingKey()
+                ]);
             }
             $this->connectionMutex->unlock(static::MAIN_HANDLER_LOCK);
             $this->processed += count($this->currentMessages);
@@ -816,7 +821,7 @@ class BatchableConsumer extends Consumer
         if (!$this->isAsyncMode()) {
             return;
         }
-        $heartbeatInterval = (int) ($this->config['options']['heartbeat'] ?? 0);
+        $heartbeatInterval = (int)($this->config['options']['heartbeat'] ?? 0);
         if (!$heartbeatInterval) {
             return;
         }

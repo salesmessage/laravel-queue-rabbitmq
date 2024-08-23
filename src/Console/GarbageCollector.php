@@ -83,7 +83,7 @@ class GarbageCollector extends Command
                 $dlx = $arguments->{'x-dead-letter-exchange'} ?? null;
                 $dlk = $arguments->{'x-dead-letter-routing-key'} ?? null;
 
-                if (empty($dlk) || 0 === $queue->messages) {
+                if (empty($dlk) || 0 === ($queue->messages ?? 0)) {
                     continue;
                 }
 

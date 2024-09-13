@@ -97,14 +97,14 @@ class GarbageCollector extends Command
         $queuesToRemove = collect($queues)
             ->filter(function ($queue) use ($dlqTargets) {
                 $messages = $queue->messages ?? 0;
-                return $queue->name !== 'default'
+                return ($queue->name !== 'default')
                     && !str_contains($queue->name, 'failed')
                     && !str_contains($queue->name, 'dlq')
                     && !isset($dlqTargets[$queue->name])
                     && $messages === 0
                     && ($queue->messages_details?->rate ?? 0.0) === 0.0
-                    && $queue->messages_ready_details->rate === 0.0
-                    && $queue->messages_unacknowledged_details->rate === 0.0;
+                    && ($queue->messages_ready_details?->rate ?? 0.0) === 0.0
+                    && ($queue->messages_unacknowledged_details?->rate ?? 0.0) === 0.0;
             })
             ->pluck('name')
             ->values()

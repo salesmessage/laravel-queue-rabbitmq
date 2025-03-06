@@ -3,6 +3,7 @@
 namespace VladimirYuldashev\LaravelQueueRabbitMQ;
 
 use GuzzleHttp\Exception\RequestException;
+use GuzzleHttp\RequestOptions;
 use VladimirYuldashev\LaravelQueueRabbitMQ\Exceptions\MutexTimeout;
 use VladimirYuldashev\LaravelQueueRabbitMQ\Interfaces\RabbitMQBatchable;
 use GuzzleHttp\Client;
@@ -357,7 +358,7 @@ class BatchableConsumer extends Consumer
             $this->currentConsumeInterval = $this->consumeInterval;
 
             if ($this->preCheck || $this->autoPrefetch || $this->consumeIntervalMapping) {
-                $client = new Client();
+                $client = $this->getHttpClient();
 
                 $host = $this->config['hosts'][0]['host'];
                 $port = $this->config['hosts'][0]['api_port'];
@@ -552,7 +553,7 @@ class BatchableConsumer extends Consumer
             $port = $this->config['hosts'][0]['api_port'];
             $username = $this->config['hosts'][0]['user'];
             $password = $this->config['hosts'][0]['password'];
-            $client = new Client();
+            $client = $this->getHttpClient();
             $scheme = $this->config['secure'] ? 'https://' : 'http://';
             $url = $scheme . $host . ':' . $port;
             $res = $client->get(
@@ -860,5 +861,16 @@ class BatchableConsumer extends Consumer
                 }
             }
         });
+    }
+
+    /**
+     * @return Client
+     */
+    private function getHttpClient(): Client
+    {
+        return new Client([
+            RequestOptions::TIMEOUT => 30,
+            RequestOptions::CONNECT_TIMEOUT => 30,
+        ]);
     }
 }

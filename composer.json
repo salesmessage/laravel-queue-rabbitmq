@@ -34,7 +34,7 @@
     },
     "extra": {
         "branch-alias": {
-            "dev-master": "13.50-dev"
+            "dev-master": "13.51-dev"
         },
         "laravel": {
             "providers": [

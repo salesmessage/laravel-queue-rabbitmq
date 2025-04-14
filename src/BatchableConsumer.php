@@ -557,7 +557,7 @@ class BatchableConsumer extends Consumer
             $scheme = $this->config['secure'] ? 'https://' : 'http://';
             $url = $scheme . $host . ':' . $port;
             $res = $client->get(
-                "$url/api/queues?columns=messages_unacknowledged,messages_ready,message_bytes_unacknowledged,message_bytes_ready,name,policy,idle_since,consumers,state,consumer_details.consumer_tag,consumer_details.channel_details.connection_name,consumer_details.channel_details.name,consumers",
+                "$url/api/queues/%2F?columns=messages_unacknowledged,messages_ready,message_bytes_unacknowledged,message_bytes_ready,name,policy,idle_since,consumers,state,consumer_details.consumer_tag,consumer_details.channel_details.connection_name,consumer_details.channel_details.name,consumers",
                 [
                     'headers' => [
                         'Authorization' => 'Basic ' . base64_encode(

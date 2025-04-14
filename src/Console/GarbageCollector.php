@@ -54,7 +54,7 @@ class GarbageCollector extends Command
             $tries++;
             try {
                 $res = $client->get(
-                    "{$scheme}{$url}/api/queues",
+                    "{$scheme}{$url}/api/queues/%2F",
                     [
                         'headers' => [
                             'Authorization' => 'Basic ' . base64_encode(

@@ -43,7 +43,7 @@ class GarbageCollector extends Command
     public function handle()
     {
         $scheme = $this->config['secure'] ? 'https://' : 'http://';
-        $host = $this->config['hosts'][0]['host'];
+        $host = $this->config['hosts'][0]['api_host'];
         $port = $this->config['hosts'][0]['api_port'];
         $username = $this->config['hosts'][0]['user'];
         $password = $this->config['hosts'][0]['password'];

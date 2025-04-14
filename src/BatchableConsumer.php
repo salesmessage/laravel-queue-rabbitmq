@@ -360,7 +360,7 @@ class BatchableConsumer extends Consumer
             if ($this->preCheck || $this->autoPrefetch || $this->consumeIntervalMapping) {
                 $client = $this->getHttpClient();
 
-                $host = $this->config['hosts'][0]['host'];
+                $host = $this->config['hosts'][0]['api_host'];
                 $port = $this->config['hosts'][0]['api_port'];
                 $username = $this->config['hosts'][0]['user'];
                 $password = $this->config['hosts'][0]['password'];
@@ -549,7 +549,7 @@ class BatchableConsumer extends Consumer
     private function discoverQueues()
     {
         do {
-            $host = $this->config['hosts'][0]['host'];
+            $host = $this->config['hosts'][0]['api_host'];
             $port = $this->config['hosts'][0]['api_port'];
             $username = $this->config['hosts'][0]['user'];
             $password = $this->config['hosts'][0]['password'];

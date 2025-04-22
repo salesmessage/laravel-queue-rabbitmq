@@ -54,7 +54,7 @@ class GarbageCollector extends Command
             $tries++;
             try {
                 $res = $client->get(
-                    "{$scheme}{$url}/api/queues/%2F",
+                    "{$scheme}{$url}/api/queues/%2F?disable_stats=true&enable_queue_totals=true",
                     [
                         'headers' => [
                             'Authorization' => 'Basic ' . base64_encode(
@@ -101,10 +101,7 @@ class GarbageCollector extends Command
                     && !str_contains($queue->name, 'failed')
                     && !str_contains($queue->name, 'dlq')
                     && !isset($dlqTargets[$queue->name])
-                    && $messages === 0
-                    && ($queue->messages_details?->rate ?? 0.0) === 0.0
-                    && ($queue->messages_ready_details?->rate ?? 0.0) === 0.0
-                    && ($queue->messages_unacknowledged_details?->rate ?? 0.0) === 0.0;
+                    && $messages === 0;
             })
             ->pluck('name')
             ->values()

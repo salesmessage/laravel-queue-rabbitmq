@@ -59,7 +59,7 @@ class RabbitMQQueue extends Queue implements QueueContract, RabbitMQQueueContrac
     /**
      * Holds the Configuration
      */
-    protected QueueConfig $config;
+    protected $config;
 
     /**
      * RabbitMQQueue constructor.

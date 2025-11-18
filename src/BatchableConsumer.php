@@ -4,6 +4,7 @@ namespace VladimirYuldashev\LaravelQueueRabbitMQ;
 
 use GuzzleHttp\Exception\RequestException;
 use GuzzleHttp\RequestOptions;
+use PhpAmqpLib\Exception\AMQPProtocolChannelException;
 use VladimirYuldashev\LaravelQueueRabbitMQ\Exceptions\MutexTimeout;
 use VladimirYuldashev\LaravelQueueRabbitMQ\Interfaces\RabbitMQBatchable;
 use GuzzleHttp\Client;
@@ -304,8 +305,25 @@ class BatchableConsumer extends Consumer
             'currentMessagesCount' => count($this->currentMessages),
         ]);
 
-        $nextQueue = $this->discoverNextQueue($first);
-        $this->startConsuming($nextQueue);
+        $nonExistingQueues = [];
+        while (true) {
+            $nextQueue = $this->discoverNextQueue($first);
+            if ($this->startConsuming($nextQueue)) {
+                break;
+            }
+
+            // to exclude infinite loop when for some reason we can't fetch "fresh" queue list
+            if ($nonExistingQueues[$nextQueue] ?? 0 >= 3) {
+                logger()->error('RabbitMQConsumer.switchToNextQueue.queueNotFound.tooManyAttempts', [
+                    'queue' => $nextQueue,
+                ]);
+                throw new \RuntimeException('Too many attempts to fetch non-existing queue: ' . $nextQueue);
+            }
+
+            $this->sleep(3);
+            $first = false;
+            $nonExistingQueues[$nextQueue] = ($nonExistingQueues[$nextQueue] ?? 0) + 1;
+        }
 
         logger()->info('RabbitMQConsumer.switchToNextQueue.after', [
             'workerName' => $this->name,
@@ -492,8 +510,12 @@ class BatchableConsumer extends Consumer
      * AMQP consuming logic
      *
      * @param string $queue
+     *
+     * @return bool
+     * @throws AMQPProtocolChannelException
+     * @throws MutexTimeout
      */
-    private function startConsuming(string $queue)
+    private function startConsuming(string $queue): bool
     {
         $callback = function (AMQPMessage $message) use ($queue, &$callback): void {
             if (!$this->isValidMessage($message, $queue)) {
@@ -513,16 +535,34 @@ class BatchableConsumer extends Consumer
         ]);
 
         $this->connectionMutex->lock(static::MAIN_HANDLER_LOCK);
-        $this->channel->basic_consume(
-            $queue,
-            $this->consumerTag,
-            false,
-            false,
-            false,
-            false,
-            $callback
-        );
-        $this->connectionMutex->unlock(static::MAIN_HANDLER_LOCK);
+        try {
+            $this->channel->basic_consume(
+                $queue,
+                $this->consumerTag,
+                false,
+                false,
+                false,
+                false,
+                $callback
+            );
+        } catch (AMQPProtocolChannelException $e) {
+            if ($e->getCode() !== 404) {
+                throw $e;
+            }
+
+            logger()->warning('RabbitMQConsumer.queues.startConsuming.failed.queueNotFound', [
+                'queue' => $queue,
+            ]);
+
+            // we have to close to not trigger channel close error on the next consuming
+            $this->channel = $this->queueConnection->getChannel(true);
+
+            return false;
+        } finally {
+            $this->connectionMutex->unlock(static::MAIN_HANDLER_LOCK);
+        }
+
+        return true;
     }
 
     /**

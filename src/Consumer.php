@@ -266,16 +266,17 @@ class Consumer extends Worker
      *
      * @param  int  $status
      * @param  WorkerOptions|null  $options
+     * @param  \Illuminate\Queue\WorkerStopReason|null  $reason
      * @return int
      */
-    public function stop($status = 0, $options = null)
+    public function stop($status = 0, $options = null, $reason = null)
     {
         $this->connectionMutex->lock(static::MAIN_HANDLER_LOCK);
 
         // Tell the server you are going to stop consuming.
         // It will finish up the last message and not send you any more.
         $this->channel->basic_cancel($this->consumerTag, false, true);
-        $stoppingStatus = parent::stop($status, $options);
+        $stoppingStatus = parent::stop($status, $options, $reason);
 
         $this->connectionMutex->unlock(static::MAIN_HANDLER_LOCK);
 

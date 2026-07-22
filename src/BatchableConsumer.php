@@ -221,7 +221,7 @@ class BatchableConsumer extends Consumer
                 // Finally, we will check to see if we have exceeded our memory limits or if
                 // the queue should restart based on other indications. If so, we'll stop
                 // this worker and let whatever is "monitoring" it restart the process.
-                $this->workerExitCode = $this->stopIfNecessary(
+                $stopResult = $this->stopIfNecessary(
                     $options,
                     $lastRestart,
                     $startTime,
@@ -229,6 +229,9 @@ class BatchableConsumer extends Consumer
                     $this->currentJob
                 );
 
+                $this->workerExitCode = is_array($stopResult)
+                    ? ($stopResult[0] ?? null)
+                    : $stopResult;
                 if (!is_null($this->workerExitCode)) {
                     return $this->stop($this->workerExitCode, $options);
                 }

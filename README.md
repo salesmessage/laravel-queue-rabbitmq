@@ -9,16 +9,16 @@ RabbitMQ Queue driver for Laravel
 
 Only the latest version will get new features. Bug fixes will be provided using the following scheme:
 
-| Package Version | Laravel Version | Bug Fixes Until  |                                                                                             |
-|-----------------|-----------------|------------------|---------------------------------------------------------------------------------------------|
-| 13              | 49               | August 8th, 2023 | [Documentation](https://github.com/vyuldashev/laravel-queue-rabbitmq/blob/master/README.md) |
+| Package Version | Laravel Version | Bug Fixes Until |                                                                                             |
+|-----------------|-----------------|-----------------|---------------------------------------------------------------------------------------------|
+| 13              | 62              | July 22th, 2026 | [Documentation](https://github.com/vyuldashev/laravel-queue-rabbitmq/blob/master/README.md) |
 
 ## Installation
 
 You can install this package via composer using this command:
 
 ```
-composer require vladimir-yuldashev/laravel-queue-rabbitmq
+composer require salesmessage/laravel-queue-rabbitmq
 ```
 
 The package will automatically register itself.

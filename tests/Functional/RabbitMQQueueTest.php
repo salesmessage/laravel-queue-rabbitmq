@@ -283,7 +283,7 @@ class RabbitMQQueueTest extends BaseTestCase
             'x-dead-letter-exchange' => '',
             'x-dead-letter-routing-key' => $name,
             'x-message-ttl' => $ttl,
-            'x-expires' => $ttl * 2,
+            'x-expires' => 300000,
         ];
         $this->assertEquals(array_keys($expected), array_keys($actual));
         $this->assertEquals(array_values($expected), array_values($actual));
@@ -294,7 +294,7 @@ class RabbitMQQueueTest extends BaseTestCase
             'x-dead-letter-exchange' => 'application-x',
             'x-dead-letter-routing-key' => sprintf('process.%s', $name),
             'x-message-ttl' => $ttl,
-            'x-expires' => $ttl * 2,
+            'x-expires' => 300000,
         ];
         $this->assertEquals(array_keys($expected), array_keys($actual));
         $this->assertEquals(array_values($expected), array_values($actual));
@@ -305,9 +305,25 @@ class RabbitMQQueueTest extends BaseTestCase
             'x-dead-letter-exchange' => '',
             'x-dead-letter-routing-key' => $name,
             'x-message-ttl' => $ttl,
-            'x-expires' => $ttl * 2,
+            'x-expires' => 300000,
         ];
         $this->assertEquals(array_keys($expected), array_keys($actual));
         $this->assertEquals(array_values($expected), array_values($actual));
+    }
+
+    public function testDelayQueueArgumentsExpiresHasMinimumFiveMinuteFloor(): void
+    {
+        $name = Str::random();
+        $queue = $this->connection();
+
+        // ttl * 2 (24000ms) is below the 5-minute floor, so x-expires is floored to 300000ms.
+        $shortTtl = 12000;
+        $actual = $this->callMethod($queue, 'getDelayQueueArguments', [$name, $shortTtl]);
+        $this->assertSame(300000, $actual['x-expires']);
+
+        // ttl * 2 (400000ms) exceeds the 5-minute floor, so x-expires stays at ttl * 2.
+        $longTtl = 200000;
+        $actual = $this->callMethod($queue, 'getDelayQueueArguments', [$name, $longTtl]);
+        $this->assertSame($longTtl * 2, $actual['x-expires']);
     }
 }

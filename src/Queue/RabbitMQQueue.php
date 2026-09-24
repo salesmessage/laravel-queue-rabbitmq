@@ -427,6 +427,12 @@ class RabbitMQQueue extends Queue implements QueueContract, RabbitMQQueueContrac
 
     /**
      * Declare a queue in rabbitMQ, when not already declared.
+     *
+     * A queue that already exists with different arguments (e.g. an old and a new pod
+     * declaring the same delay queue with a different x-expires during a rolling deploy)
+     * makes RabbitMQ close the channel with a 406 PRECONDITION_FAILED. The queue itself
+     * is still usable as declared by whichever side got there first, so that case is
+     * treated as success instead of propagated.
      */
     public function declareQueue(
         string $name,
@@ -434,17 +440,30 @@ class RabbitMQQueue extends Queue implements QueueContract, RabbitMQQueueContrac
         bool $autoDelete = false,
         array $arguments = []
     ): void {
+        if ($this->isQueueDeclared($name)) {
+            return;
+        }
+
         $channel = $this->createChannel();
-        $channel->queue_declare(
-            $name,
-            false,
-            $durable,
-            false,
-            $autoDelete,
-            false,
-            new AMQPTable($arguments)
-        );
-        $channel->close();
+
+        try {
+            $channel->queue_declare(
+                $name,
+                false,
+                $durable,
+                false,
+                $autoDelete,
+                false,
+                new AMQPTable($arguments)
+            );
+            $channel->close();
+        } catch (AMQPProtocolChannelException $exception) {
+            if ($exception->amqp_reply_code !== 406) {
+                throw $exception;
+            }
+        }
+
+        $this->queues[] = $name;
     }
 
     /**
@@ -761,7 +780,7 @@ class RabbitMQQueue extends Queue implements QueueContract, RabbitMQQueueContrac
 
     public function getChannel($forceNew = false): AMQPChannel
     {
-        if (! $this->channel || $forceNew) {
+        if (! $this->channel || ! $this->channel->is_open() || $forceNew) {
             $this->channel = $this->createChannel();
         }
 

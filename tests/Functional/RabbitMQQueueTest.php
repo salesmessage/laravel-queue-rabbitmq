@@ -343,4 +343,24 @@ class RabbitMQQueueTest extends BaseTestCase
 
         $queue->deleteQueue($name);
     }
+
+    public function testDeclareQueueAlwaysRedeclaresToKeepExpiryFresh(): void
+    {
+        $queue = $this->connection();
+        $name = Str::random();
+
+        // RabbitMQ's x-expires "unused" timer resets on redeclare (among other
+        // things). declareQueue() must NOT cache a queue as already-declared, or a
+        // long-lived consumer process stops refreshing the expiry between publishes
+        // and the broker reaps the queue out from under it. Simulate that: delete
+        // the queue directly on the broker, then declare it again from the same
+        // instance - it must actually redeclare, not skip based on stale state.
+        $queue->declareQueue($name, true, false, ['x-message-ttl' => 3000, 'x-expires' => 6000]);
+        $queue->deleteQueue($name);
+        $queue->declareQueue($name, true, false, ['x-message-ttl' => 3000, 'x-expires' => 6000]);
+
+        $this->assertTrue($queue->isQueueExists($name));
+
+        $queue->deleteQueue($name);
+    }
 }

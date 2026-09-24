@@ -440,10 +440,6 @@ class RabbitMQQueue extends Queue implements QueueContract, RabbitMQQueueContrac
         bool $autoDelete = false,
         array $arguments = []
     ): void {
-        if ($this->isQueueDeclared($name)) {
-            return;
-        }
-
         $channel = $this->createChannel();
 
         try {
@@ -462,8 +458,6 @@ class RabbitMQQueue extends Queue implements QueueContract, RabbitMQQueueContrac
                 throw $exception;
             }
         }
-
-        $this->queues[] = $name;
     }
 
     /**

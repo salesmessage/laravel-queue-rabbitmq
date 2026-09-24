@@ -11,7 +11,7 @@ Only the latest version will get new features. Bug fixes will be provided using 
 
 | Package Version | Laravel Version | Bug Fixes Until |                                                                                             |
 |-----------------|-----------------|-----------------|---------------------------------------------------------------------------------------------|
-| 13              | 62              | July 22th, 2026 | [Documentation](https://github.com/vyuldashev/laravel-queue-rabbitmq/blob/master/README.md) |
+| 13              | 63              | September 24th, 2026 | [Documentation](https://github.com/vyuldashev/laravel-queue-rabbitmq/blob/master/README.md) |
 
 ## Installation
 

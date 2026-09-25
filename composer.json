@@ -34,7 +34,7 @@
     },
     "extra": {
         "branch-alias": {
-            "dev-midsprint": "13.65-dev"
+            "dev-master": "13.65-dev"
         },
         "laravel": {
             "providers": [

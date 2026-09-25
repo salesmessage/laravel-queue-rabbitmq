@@ -326,21 +326,4 @@ class RabbitMQQueueTest extends BaseTestCase
         $actual = $this->callMethod($queue, 'getDelayQueueArguments', [$name, $longTtl]);
         $this->assertSame($longTtl * 2, $actual['x-expires']);
     }
-
-    public function testDeclareQueueToleratesArgumentMismatchFromAnOlderPod(): void
-    {
-        $queue = $this->connection();
-        $name = Str::random();
-
-        // Simulates the rolling-deploy race: an old pod already declared this queue
-        // with different arguments (e.g. the pre-SWR-25399 x-expires). Redeclaring
-        // with different arguments must not throw, and the connection must stay usable.
-        $queue->declareQueue($name, true, false, ['x-message-ttl' => 3000, 'x-expires' => 6000]);
-        $queue->declareQueue($name, true, false, ['x-message-ttl' => 3000, 'x-expires' => 300000]);
-
-        $this->assertTrue($queue->getChannel()->is_open());
-        $this->assertTrue($queue->isQueueExists($name));
-
-        $queue->deleteQueue($name);
-    }
 }

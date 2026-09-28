@@ -37,6 +37,7 @@ class ConfigFactory
 
             self::getHostFromConfig($connectionConfig, $config);
             self::getHeartbeatFromConfig($connectionConfig, $config);
+            self::getConnectionNameFromConfig($connectionConfig, $config);
         });
     }
 
@@ -88,6 +89,13 @@ class ConfigFactory
 
         if (is_numeric($heartbeat) && intval($heartbeat) > 0) {
             $connectionConfig->setHeartbeat((int) $heartbeat);
+        }
+    }
+
+    protected static function getConnectionNameFromConfig(AMQPConnectionConfig $connectionConfig, array $config): void
+    {
+        if ($connectionName = Arr::get($config, 'connection_name')) {
+            $connectionConfig->setConnectionName($connectionName);
         }
     }
 }

@@ -426,7 +426,15 @@ class RabbitMQQueue extends Queue implements QueueContract, RabbitMQQueueContrac
     }
 
     /**
-     * Declare a queue in rabbitMQ, when not already declared.
+     * Declare a queue in rabbitMQ.
+     *
+     * Tolerates a 406 PRECONDITION_FAILED reply: an old and a new pod can
+     * declare the same queue with different arguments while a rolling
+     * deploy overlaps (e.g. a changed delay-queue x-expires). The queue
+     * already exists and is still usable, so the mismatch is not fatal --
+     * throwing here would drop the message being published right after.
+     *
+     * @throws AMQPProtocolChannelException
      */
     public function declareQueue(
         string $name,
@@ -434,16 +442,28 @@ class RabbitMQQueue extends Queue implements QueueContract, RabbitMQQueueContrac
         bool $autoDelete = false,
         array $arguments = []
     ): void {
+        // A dedicated, throwaway channel, so the main channel used for
+        // publishing is not closed by the broker on a protocol exception.
         $channel = $this->createChannel();
-        $channel->queue_declare(
-            $name,
-            false,
-            $durable,
-            false,
-            $autoDelete,
-            false,
-            new AMQPTable($arguments)
-        );
+
+        try {
+            $channel->queue_declare(
+                $name,
+                false,
+                $durable,
+                false,
+                $autoDelete,
+                false,
+                new AMQPTable($arguments)
+            );
+        } catch (AMQPProtocolChannelException $exception) {
+            if (406 !== $exception->amqp_reply_code) {
+                throw $exception;
+            }
+
+            return;
+        }
+
         $channel->close();
     }
 

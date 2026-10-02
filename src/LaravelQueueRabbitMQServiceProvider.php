@@ -75,7 +75,9 @@ class LaravelQueueRabbitMQServiceProvider extends ServiceProvider
 
         $this->app->singleton(GarbageCollector::class, static function ($app) {
             return new GarbageCollector(
-                $app['config']['queue']['connections']['rabbitmq']
+                $app['config']['queue']['connections']['rabbitmq'],
+                null,
+                $app['cache.store']
             );
         });
 

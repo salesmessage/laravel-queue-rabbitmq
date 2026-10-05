@@ -20,7 +20,8 @@
         "laravel/horizon": "^5.0",
         "orchestra/testbench": "^7.0|^8.0",
         "laravel/pint": "^1.2",
-        "laravel/framework": "^10.0|^11.0|^12.0"
+        "laravel/framework": "^10.0|^11.0|^12.0",
+        "guzzlehttp/guzzle": "^7.0"
     },
     "autoload": {
         "psr-4": {
@@ -34,7 +35,7 @@
     },
     "extra": {
         "branch-alias": {
-            "dev-master": "13.67-dev"
+            "dev-master": "13.68-dev"
         },
         "laravel": {
             "providers": [

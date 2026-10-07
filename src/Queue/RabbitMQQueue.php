@@ -23,6 +23,7 @@ use PhpAmqpLib\Wire\AMQPTable;
 use RuntimeException;
 use Throwable;
 use VladimirYuldashev\LaravelQueueRabbitMQ\Contracts\RabbitMQQueueContract;
+use VladimirYuldashev\LaravelQueueRabbitMQ\Exceptions\DelayTooLongException;
 use VladimirYuldashev\LaravelQueueRabbitMQ\Queue\Jobs\RabbitMQJob;
 
 class RabbitMQQueue extends Queue implements QueueContract, RabbitMQQueueContract
@@ -153,6 +154,7 @@ class RabbitMQQueue extends Queue implements QueueContract, RabbitMQQueueContrac
 
     /**
      * @throws AMQPProtocolChannelException
+     * @throws DelayTooLongException
      */
     public function laterRaw($delay, string $payload, $queue = null, int $attempts = 0): int|string|null
     {
@@ -165,6 +167,8 @@ class RabbitMQQueue extends Queue implements QueueContract, RabbitMQQueueContrac
         if ($ttl <= 0) {
             return $this->pushRaw($payload, $queue, $options);
         }
+
+        $ttl = $this->guardMaxDelay($ttl, $payload, $queue);
 
         // Create a main queue to handle delayed messages
         [$mainDestination, $exchange, $exchangeType, $attempts] = $this->publishProperties($queue, $options);
@@ -661,6 +665,46 @@ class RabbitMQQueue extends Queue implements QueueContract, RabbitMQQueueContrac
             'x-message-ttl' => $ttl,
             'x-expires' => max(self::MIN_DELAY_QUEUE_EXPIRES_MS, $ttl * 2),
         ];
+    }
+
+    /**
+     * SWR-25568
+     *
+     * @return int the TTL in milliseconds to publish with
+     *
+     * @throws DelayTooLongException
+     */
+    protected function guardMaxDelay(int $ttl, string $payload, $queue = null): int
+    {
+        $maxDelaySeconds = $this->getRabbitMQConfig()->getMaxDelaySeconds();
+        if ($maxDelaySeconds <= 0 || $ttl <= $maxDelaySeconds * 1000) {
+            return $ttl;
+        }
+
+        $queue = $this->getQueue($queue);
+        $delaySeconds = intdiv($ttl, 1000);
+        $mode = $this->getRabbitMQConfig()->getMaxDelayMode();
+
+        if ($mode === QueueConfig::MAX_DELAY_MODE_THROW) {
+            throw DelayTooLongException::forQueue($queue, $delaySeconds, $maxDelaySeconds);
+        }
+
+        $context = [
+            'queue' => $queue,
+            'job' => json_decode($payload, true)['displayName'] ?? null,
+            'delay_seconds' => $delaySeconds,
+            'max_delay_seconds' => $maxDelaySeconds,
+        ];
+
+        if ($mode === QueueConfig::MAX_DELAY_MODE_CLAMP) {
+            logger()->warning('RabbitMQQueue.laterRaw.delayClamped', $context);
+
+            return $maxDelaySeconds * 1000;
+        }
+
+        logger()->error('RabbitMQQueue.laterRaw.delayTooLong', $context);
+
+        return $ttl;
     }
 
     /**

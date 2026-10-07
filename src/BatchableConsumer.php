@@ -316,7 +316,7 @@ class BatchableConsumer extends Consumer
             }
 
             // to exclude infinite loop when for some reason we can't fetch "fresh" queue list
-            if ($nonExistingQueues[$nextQueue] ?? 0 >= 3) {
+            if (($nonExistingQueues[$nextQueue] ?? 0) >= 3) {
                 logger()->error('RabbitMQConsumer.switchToNextQueue.queueNotFound.tooManyAttempts', [
                     'queue' => $nextQueue,
                 ]);
@@ -403,7 +403,7 @@ class BatchableConsumer extends Consumer
                     );
                 } catch (RequestException $e) {
                     if ((int) $e->getCode() === 404) {
-                        logger()->warning('RabbitMQConsumer.discoverNextQueue.queueNotFound', [
+                        logger()->info('RabbitMQConsumer.discoverNextQueue.queueNotFound', [
                             'queue' => $nextQueue,
                         ]);
                         $queueIsNotReady = true;
@@ -553,7 +553,7 @@ class BatchableConsumer extends Consumer
                 throw $e;
             }
 
-            logger()->warning('RabbitMQConsumer.queues.startConsuming.failed.queueNotFound', [
+            logger()->info('RabbitMQConsumer.queues.startConsuming.failed.queueNotFound', [
                 'queue' => $queue,
             ]);
 

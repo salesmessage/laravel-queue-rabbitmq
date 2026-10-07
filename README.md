@@ -148,6 +148,41 @@ by adding extra options.
 ],
 ```
 
+Delayed messages wait in a delay queue and are dead-lettered to the target queue when their TTL expires.
+If the broker expires idle queues (an `expires` policy), a delay longer than that expiry can land in a queue
+that no longer exists, and the message is lost. `max_delay_seconds` caps the delay of `later()`, `laterRaw()`
+and job releases.
+
+- `max_delay_seconds` defaults to `86400` (1 day). `0` disables the check.
+- `max_delay_mode` is one of:
+  - `log` (default): writes an error `RabbitMQQueue.laterRaw.delayTooLong` and publishes with the requested delay;
+  - `clamp`: writes a warning `RabbitMQQueue.laterRaw.delayClamped` and publishes with `max_delay_seconds`
+    instead, so the job runs earlier than requested but is not lost;
+  - `throw`: raises `DelayTooLongException` and publishes nothing.
+- In `throw` mode a job release with a longer backoff throws as well. The original message is then not
+  acknowledged, and the broker redelivers it once the consumer's channel closes. `clamp` avoids that.
+
+```php
+'connections' => [
+    // ...
+
+    'rabbitmq' => [
+        // ...
+
+        'options' => [
+            'queue' => [
+                // ...
+
+                'max_delay_seconds' => 86400,
+                'max_delay_mode' => 'log',
+            ],
+        ],
+    ],
+
+    // ...    
+],
+```
+
 ### Horizon support
 
 Starting with 8.0, this package supports [Laravel Horizon](https://laravel.com/docs/horizon) out of the box. Firstly,

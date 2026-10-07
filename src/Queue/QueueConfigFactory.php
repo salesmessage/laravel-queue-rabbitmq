@@ -68,6 +68,14 @@ class QueueConfigFactory
             $queueConfig->setQuorum($quorum);
         }
 
+        $maxDelaySeconds = Arr::pull($queueOptions, 'max_delay_seconds');
+        if ($maxDelaySeconds !== null && $maxDelaySeconds !== '') {
+            $queueConfig->setMaxDelaySeconds($maxDelaySeconds);
+        }
+        if ($maxDelayMode = Arr::pull($queueOptions, 'max_delay_mode')) {
+            $queueConfig->setMaxDelayMode($maxDelayMode);
+        }
+
         // All extra options not defined
         $queueConfig->setOptions($queueOptions);
     }

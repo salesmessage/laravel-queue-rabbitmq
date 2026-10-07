@@ -7,7 +7,6 @@ use Illuminate\Queue\QueueManager;
 use Illuminate\Support\ServiceProvider;
 use VladimirYuldashev\LaravelQueueRabbitMQ\Console\BatchableConsumeCommand;
 use VladimirYuldashev\LaravelQueueRabbitMQ\Console\ConsumeCommand;
-use VladimirYuldashev\LaravelQueueRabbitMQ\Console\GarbageCollector;
 use VladimirYuldashev\LaravelQueueRabbitMQ\Queue\Connectors\RabbitMQConnector;
 
 class LaravelQueueRabbitMQServiceProvider extends ServiceProvider
@@ -73,14 +72,6 @@ class LaravelQueueRabbitMQServiceProvider extends ServiceProvider
             ]);
         }
 
-        $this->app->singleton(GarbageCollector::class, static function ($app) {
-            return new GarbageCollector(
-                $app['config']['queue']['connections']['rabbitmq'],
-                null,
-                $app['cache.store']
-            );
-        });
-
         $this->commands([
             Console\ExchangeDeclareCommand::class,
             Console\ExchangeDeleteCommand::class,
@@ -88,7 +79,6 @@ class LaravelQueueRabbitMQServiceProvider extends ServiceProvider
             Console\QueueDeclareCommand::class,
             Console\QueueDeleteCommand::class,
             Console\QueuePurgeCommand::class,
-            Console\GarbageCollector::class,
         ]);
     }
 

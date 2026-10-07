@@ -6,6 +6,12 @@ use VladimirYuldashev\LaravelQueueRabbitMQ\Queue\Jobs\RabbitMQJob;
 
 class QueueConfig
 {
+    public const MAX_DELAY_MODE_LOG = 'log';
+
+    public const MAX_DELAY_MODE_THROW = 'throw';
+
+    public const MAX_DELAY_MODE_CLAMP = 'clamp';
+
     protected string $queue = 'default';
 
     protected bool $dispatchAfterCommit = false;
@@ -29,6 +35,10 @@ class QueueConfig
     protected string $failedRoutingKey = '%s.failed';
 
     protected bool $quorum = false;
+
+    protected int $maxDelaySeconds = 86400;
+
+    protected string $maxDelayMode = self::MAX_DELAY_MODE_LOG;
 
     protected array $options = [];
 
@@ -243,6 +253,30 @@ class QueueConfig
     public function setQuorum($quorum): QueueConfig
     {
         $this->quorum = $this->toBoolean($quorum);
+
+        return $this;
+    }
+
+    public function getMaxDelaySeconds(): int
+    {
+        return $this->maxDelaySeconds;
+    }
+
+    public function setMaxDelaySeconds($maxDelaySeconds): QueueConfig
+    {
+        $this->maxDelaySeconds = (int) $maxDelaySeconds;
+
+        return $this;
+    }
+
+    public function getMaxDelayMode(): string
+    {
+        return $this->maxDelayMode;
+    }
+
+    public function setMaxDelayMode(string $maxDelayMode): QueueConfig
+    {
+        $this->maxDelayMode = $maxDelayMode;
 
         return $this;
     }

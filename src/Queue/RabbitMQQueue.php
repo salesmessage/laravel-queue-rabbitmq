@@ -28,11 +28,6 @@ use VladimirYuldashev\LaravelQueueRabbitMQ\Queue\Jobs\RabbitMQJob;
 class RabbitMQQueue extends Queue implements QueueContract, RabbitMQQueueContract
 {
     /**
-     * Minimum lifetime (in milliseconds) of an auto-declared delay queue, regardless of the message TTL.
-     */
-    private const MIN_DELAY_QUEUE_EXPIRES_MS = 5 * 60 * 1000;
-
-    /**
      * The RabbitMQ connection instance.
      */
     protected ?AbstractConnection $connection = null;
@@ -652,6 +647,10 @@ class RabbitMQQueue extends Queue implements QueueContract, RabbitMQQueueContrac
 
     /**
      * Get the Delay queue arguments.
+     *
+     * There is intentionally no x-expires: on RabbitMQ 4.3.1 the quorum queue expiry is a fixed
+     * lifetime from creation (a redeclare or a publish does not reset it), so the broker deletes the
+     * queue together with the messages still waiting in it.
      */
     protected function getDelayQueueArguments(string $destination, int $ttl): array
     {
@@ -659,7 +658,6 @@ class RabbitMQQueue extends Queue implements QueueContract, RabbitMQQueueContrac
             'x-dead-letter-exchange' => $this->getExchange(),
             'x-dead-letter-routing-key' => $this->getRoutingKey($destination),
             'x-message-ttl' => $ttl,
-            'x-expires' => max(self::MIN_DELAY_QUEUE_EXPIRES_MS, $ttl * 2),
         ];
     }
 
